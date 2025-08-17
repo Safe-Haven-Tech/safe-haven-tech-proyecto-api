@@ -96,12 +96,28 @@ const UsuarioSchema = new Schema({
   activo: {
     type: Boolean,
     default: true
+  },
+  estado: {
+    type: String,
+    enum: {
+      values: ['activo', 'inactivo', 'suspendido', 'eliminado'],
+      message: 'El estado debe ser: activo, inactivo, suspendido o eliminado'
+    },
+    default: 'activo'
+  },
+  fechaEstado: {
+    type: Date,
+    default: Date.now
+  },
+  motivoEstado: {
+    type: String,
+    maxlength: [500, 'El motivo del estado no puede exceder los 500 caracteres']
   }
 }, {
   timestamps: true 
 });
 
-UsuarioSchema.index({ correo: 1 });
+// Solo índices adicionales (correo ya tiene unique: true)
 UsuarioSchema.index({ rol: 1 });
 UsuarioSchema.index({ activo: 1 });
 UsuarioSchema.index({ fechaNacimiento: 1 });

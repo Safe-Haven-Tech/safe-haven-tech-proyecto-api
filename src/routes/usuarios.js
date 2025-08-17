@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { registrarUsuario, obtenerUsuarios, obtenerUsuarioPorId, actualizarUsuario, eliminarUsuario } = require('../controllers/usuariosController');
+const { registrarUsuario, obtenerUsuarios, obtenerUsuarioPorId, actualizarUsuario, cambiarEstadoUsuario, desactivarUsuario, activarUsuario } = require('../controllers/usuariosController');
 const { validarRegistroUsuario, validarActualizacionUsuario, validarIdMongo } = require('../middlewares/validacion');
 
 /**
@@ -32,10 +32,24 @@ router.get('/:id', validarIdMongo, obtenerUsuarioPorId);
 router.put('/:id', validarIdMongo, validarActualizacionUsuario, actualizarUsuario);
 
 /**
- * @route   DELETE /api/usuarios/:id
- * @desc    Eliminar usuario
- * @access  Private (usuario propio o administrador)
+ * @route   PATCH /api/usuarios/:id/estado
+ * @desc    Cambiar estado del usuario
+ * @access  Private (solo administradores)
  */
-router.delete('/:id', validarIdMongo, eliminarUsuario);
+router.patch('/:id/estado', validarIdMongo, cambiarEstadoUsuario);
+
+/**
+ * @route   PATCH /api/usuarios/:id/desactivar
+ * @desc    Desactivar usuario
+ * @access  Private (solo administradores)
+ */
+router.patch('/:id/desactivar', validarIdMongo, desactivarUsuario);
+
+/**
+ * @route   PATCH /api/usuarios/:id/activar
+ * @desc    Activar usuario
+ * @access  Private (solo administradores)
+ */
+router.patch('/:id/activar', validarIdMongo, activarUsuario);
 
 module.exports = router;

@@ -34,7 +34,6 @@ const iniciarServidor = async () => {
       console.log(`📦 Versión: ${infoServidor.version}`);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       
-      // Mostrar información adicional en desarrollo
       if (config.servidor.entorno === 'development') {
         console.log('💡 Modo desarrollo activado');
         console.log('📝 Logs detallados habilitados');
@@ -42,7 +41,6 @@ const iniciarServidor = async () => {
       }
     });
     
-    // Configurar manejo de errores del servidor
     servidor.on('error', (error) => {
       if (error.code === 'EADDRINUSE') {
         console.error(`❌ Error: El puerto ${config.servidor.puerto} ya está en uso`);

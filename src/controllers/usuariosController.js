@@ -70,13 +70,14 @@ const registrarUsuario = async (req, res) => {
  */
 const obtenerUsuarios = async (req, res) => {
   try {
-    const { pagina = 1, limite = 10, rol, activo, busqueda } = req.query;
+    const { pagina = 1, limite = 10, rol, activo, estado, busqueda } = req.query;
     
     // Construir filtros
     const filtros = {};
     
     if (rol) filtros.rol = rol;
-    if (activo !== undefined) filtros.activo = activo === 'true';
+    if (activo !== undefined) filtros.activo = activo;
+    if (estado) filtros.estado = estado;
     if (busqueda) {
       filtros.busqueda = busqueda;
     }
@@ -201,25 +202,126 @@ const actualizarUsuario = async (req, res) => {
 };
 
 /**
- * @desc    Eliminar usuario
- * @route   DELETE /api/usuarios/:id
- * @access  Private (usuario propio o administrador)
+ * @desc    Cambiar estado del usuario
+ * @route   PATCH /api/usuarios/:id/estado
+ * @access  Private (solo administradores)
  */
-const eliminarUsuario = async (req, res) => {
+const cambiarEstadoUsuario = async (req, res) => {
   try {
     const { id } = req.params;
+    const { estado, motivo } = req.body;
 
-    // Usar el servicio para eliminar el usuario
-    const usuarioEliminado = await usuariosService.eliminarUsuario(id);
+    if (!estado) {
+      return res.status(400).json({
+        error: 'Estado requerido',
+        detalles: 'El campo estado es obligatorio'
+      });
+    }
+
+    // Usar el servicio para cambiar el estado del usuario
+    const usuarioActualizado = await usuariosService.cambiarEstadoUsuario(id, estado, motivo);
 
     res.json({
-      mensaje: 'Usuario eliminado exitosamente',
-      usuarioEliminado,
+      mensaje: `Estado del usuario cambiado a: ${estado}`,
+      usuario: usuarioActualizado,
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('❌ Error al eliminar usuario:', error);
+    console.error('❌ Error al cambiar estado del usuario:', error);
+    
+    if (error.message === 'No existe un usuario con el ID proporcionado') {
+      return res.status(404).json({
+        error: 'Usuario no encontrado',
+        detalles: error.message
+      });
+    }
+
+    if (error.message === 'Estado no válido. Estados permitidos: activo, inactivo, suspendido, eliminado') {
+      return res.status(400).json({
+        error: 'Estado no válido',
+        detalles: error.message
+      });
+    }
+
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        error: 'ID inválido',
+        detalles: 'El formato del ID proporcionado no es válido'
+      });
+    }
+
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+    });
+  }
+};
+
+/**
+ * @desc    Desactivar usuario
+ * @route   PATCH /api/usuarios/:id/desactivar
+ * @access  Private (solo administradores)
+ */
+const desactivarUsuario = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { motivo } = req.body;
+
+    // Usar el servicio para desactivar el usuario
+    const usuarioDesactivado = await usuariosService.desactivarUsuario(id, motivo);
+
+    res.json({
+      mensaje: 'Usuario desactivado exitosamente',
+      usuario: usuarioDesactivado,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error al desactivar usuario:', error);
+    
+    if (error.message === 'No existe un usuario con el ID proporcionado') {
+      return res.status(404).json({
+        error: 'Usuario no encontrado',
+        detalles: error.message
+      });
+    }
+
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        error: 'ID inválido',
+        detalles: 'El formato del ID proporcionado no es válido'
+      });
+    }
+
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+    });
+  }
+};
+
+/**
+ * @desc    Activar usuario
+ * @route   PATCH /api/usuarios/:id/activar
+ * @access  Private (solo administradores)
+ */
+const activarUsuario = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { motivo } = req.body;
+
+    // Usar el servicio para activar el usuario
+    const usuarioActivado = await usuariosService.activarUsuario(id, motivo);
+
+    res.json({
+      mensaje: 'Usuario activado exitosamente',
+      usuario: usuarioActivado,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error al activar usuario:', error);
     
     if (error.message === 'No existe un usuario con el ID proporcionado') {
       return res.status(404).json({
@@ -247,5 +349,7 @@ module.exports = {
   obtenerUsuarios,
   obtenerUsuarioPorId,
   actualizarUsuario,
-  eliminarUsuario
+  cambiarEstadoUsuario,
+  desactivarUsuario,
+  activarUsuario
 };

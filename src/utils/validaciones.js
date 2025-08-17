@@ -12,7 +12,7 @@ const validarFechaNacimiento = function(fecha) {
     return false; 
   }
   
-  const edad = hoy.getFullYear() - fecha.getFullYear();
+  let edad = hoy.getFullYear() - fecha.getFullYear();
   const mes = hoy.getMonth() - fecha.getMonth();
   
   if (mes < 0 || (mes === 0 && hoy.getDate() < fecha.getDate())) {

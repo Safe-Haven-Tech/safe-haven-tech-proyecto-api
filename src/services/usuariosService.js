@@ -59,8 +59,26 @@ class UsuariosService {
     // Construir filtros de consulta
     const filtrosConsulta = {};
     
-    if (filtros.rol) filtrosConsulta.rol = filtros.rol;
-    if (filtros.activo !== undefined) filtrosConsulta.activo = filtros.activo === 'true';
+    // Filtro por rol
+    if (filtros.rol) {
+      filtrosConsulta.rol = filtros.rol;
+    }
+    
+    // Filtro por estado activo (boolean)
+    if (filtros.activo !== undefined) {
+      if (filtros.activo === 'true' || filtros.activo === true) {
+        filtrosConsulta.activo = true;
+      } else if (filtros.activo === 'false' || filtros.activo === false) {
+        filtrosConsulta.activo = false;
+      }
+    }
+    
+    // Filtro por estado (activo, inactivo, suspendido, eliminado)
+    if (filtros.estado) {
+      filtrosConsulta.estado = filtros.estado;
+    }
+    
+    // Filtro de búsqueda por nombre o correo
     if (filtros.busqueda) {
       filtrosConsulta.$or = [
         { nombreCompleto: { $regex: filtros.busqueda, $options: 'i' } },
@@ -71,6 +89,10 @@ class UsuariosService {
     // Calcular skip para paginación
     const skip = (parseInt(pagina) - 1) * parseInt(limite);
 
+    // Log para debugging
+    console.log('🔍 Filtros aplicados:', JSON.stringify(filtrosConsulta, null, 2));
+    console.log('📊 Paginación:', { pagina, limite, skip });
+
     // Ejecutar consulta con paginación
     const usuarios = await Usuario.find(filtrosConsulta)
       .select('-contraseña')
@@ -80,6 +102,9 @@ class UsuariosService {
 
     // Contar total de documentos
     const total = await Usuario.countDocuments(filtrosConsulta);
+
+    // Log del resultado
+    console.log(`✅ Usuarios encontrados: ${usuarios.length} de ${total} total`);
 
     // Calcular información de paginación
     const totalPaginas = Math.ceil(total / parseInt(limite));
@@ -150,27 +175,80 @@ class UsuariosService {
   }
 
   /**
-   * Eliminar usuario
+   * Cambiar estado del usuario
    * @param {string} id - ID del usuario
-   * @returns {Object} Información del usuario eliminado
+   * @param {string} nuevoEstado - Nuevo estado del usuario
+   * @param {string} motivo - Motivo del cambio de estado
+   * @returns {Object} Usuario actualizado sin contraseña
    */
-  async eliminarUsuario(id) {
+  async cambiarEstadoUsuario(id, nuevoEstado, motivo = '') {
     // Buscar usuario
     const usuario = await Usuario.findById(id);
     if (!usuario) {
       throw new Error('No existe un usuario con el ID proporcionado');
     }
 
-    // Eliminar usuario
-    await Usuario.findByIdAndDelete(id);
+    // Validar estado
+    const estadosValidos = ['activo', 'inactivo', 'suspendido', 'eliminado'];
+    if (!estadosValidos.includes(nuevoEstado)) {
+      throw new Error('Estado no válido. Estados permitidos: activo, inactivo, suspendido, eliminado');
+    }
 
-    console.log(`✅ Usuario eliminado: ${usuario.correo}`);
+    // Actualizar estado del usuario
+    const usuarioActualizado = await Usuario.findByIdAndUpdate(
+      id,
+      {
+        estado: nuevoEstado,
+        fechaEstado: new Date(),
+        motivoEstado: motivo,
+        activo: nuevoEstado === 'activo' // Mantener sincronizado con el campo activo
+      },
+      { new: true, runValidators: true }
+    ).select('-contraseña');
 
-    return {
-      id: usuario._id,
-      correo: usuario.correo,
-      nombreCompleto: usuario.nombreCompleto
-    };
+    console.log(`✅ Estado del usuario cambiado: ${usuarioActualizado.correo} -> ${nuevoEstado}`);
+
+    return usuarioActualizado;
+  }
+
+  /**
+   * Desactivar usuario (marcar como inactivo)
+   * @param {string} id - ID del usuario
+   * @param {string} motivo - Motivo de la desactivación
+   * @returns {Object} Usuario desactivado
+   */
+  async desactivarUsuario(id, motivo = 'Desactivado por el administrador') {
+    return await this.cambiarEstadoUsuario(id, 'inactivo', motivo);
+  }
+
+  /**
+   * Activar usuario (marcar como activo)
+   * @param {string} id - ID del usuario
+   * @param {string} motivo - Motivo de la activación
+   * @returns {Object} Usuario activado
+   */
+  async activarUsuario(id, motivo = 'Activado por el administrador') {
+    return await this.cambiarEstadoUsuario(id, 'activo', motivo);
+  }
+
+  /**
+   * Suspender usuario
+   * @param {string} id - ID del usuario
+   * @param {string} motivo - Motivo de la suspensión
+   * @returns {Object} Usuario suspendido
+   */
+  async suspenderUsuario(id, motivo = 'Usuario suspendido') {
+    return await this.cambiarEstadoUsuario(id, 'suspendido', motivo);
+  }
+
+  /**
+   * Marcar usuario como eliminado (soft delete)
+   * @param {string} id - ID del usuario
+   * @param {string} motivo - Motivo de la eliminación
+   * @returns {Object} Usuario marcado como eliminado
+   */
+  async marcarUsuarioEliminado(id, motivo = 'Usuario marcado como eliminado') {
+    return await this.cambiarEstadoUsuario(id, 'eliminado', motivo);
   }
 
   /**
@@ -190,6 +268,18 @@ class UsuariosService {
   async obtenerEstadisticas() {
     const totalUsuarios = await Usuario.countDocuments();
     const usuariosActivos = await Usuario.countDocuments({ activo: true });
+    
+    // Estadísticas por estado
+    const usuariosPorEstado = await Usuario.aggregate([
+      {
+        $group: {
+          _id: '$estado',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Estadísticas por rol
     const usuariosPorRol = await Usuario.aggregate([
       {
         $group: {
@@ -203,6 +293,10 @@ class UsuariosService {
       totalUsuarios,
       usuariosActivos,
       usuariosInactivos: totalUsuarios - usuariosActivos,
+      usuariosPorEstado: usuariosPorEstado.reduce((acc, item) => {
+        acc[item._id] = item.count;
+        return acc;
+      }, {}),
       usuariosPorRol: usuariosPorRol.reduce((acc, item) => {
         acc[item._id] = item.count;
         return acc;
