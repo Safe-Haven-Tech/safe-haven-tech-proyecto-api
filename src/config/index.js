@@ -25,9 +25,10 @@ const config = {
   },
 
   jwt: {
-    secreto: process.env.JWT_SECRET || 'tu_secreto_super_seguro_aqui',
-    expiracion: process.env.JWT_EXPIRES_IN || '24h',
-    refreshTokenExp: process.env.JWT_REFRESH_EXPIRES_IN || '7d'
+    secret: process.env.JWT_SECRET || 'tu_secreto_super_seguro_aqui',
+    expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+    refreshSecret: process.env.JWT_REFRESH_SECRET || 'tu_refresh_secreto_super_seguro_aqui',
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d'
   },
 
   seguridad: {

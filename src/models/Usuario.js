@@ -112,6 +112,18 @@ const UsuarioSchema = new Schema({
   motivoEstado: {
     type: String,
     maxlength: [500, 'El motivo del estado no puede exceder los 500 caracteres']
+  },
+  ultimoLogin: {
+    type: Date,
+    default: null
+  },
+  contadorLogins: {
+    type: Number,
+    default: 0
+  },
+  contraseñaCambiadaEn: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true 

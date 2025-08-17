@@ -21,17 +21,27 @@ class UsuariosService {
       throw new Error('El correo electrónico ya está registrado en el sistema');
     }
 
+    // Validar que el rol no sea administrador
+    if (rol && rol === 'administrador') {
+      throw new Error('No se permite crear usuarios con rol de administrador a través de la API pública');
+    }
+
+    // Validar que el rol sea válido (usuario o profesional)
+    if (rol && !['usuario', 'profesional'].includes(rol)) {
+      throw new Error('Rol no válido. Solo se permiten los roles: usuario o profesional');
+    }
+
     // Encriptar contraseña
     const saltRounds = config.seguridad.bcryptRounds;
     const contraseñaEncriptada = await bcrypt.hash(contraseña, saltRounds);
 
-    // Crear nuevo usuario
+    // Crear nuevo usuario (permitir usuario y profesional, NO administrador)
     const nuevoUsuario = new Usuario({
       correo: correo.toLowerCase(),
       contraseña: contraseñaEncriptada,
       nombreCompleto,
       fechaNacimiento: new Date(fechaNacimiento),
-      rol: rol || 'usuario',
+      rol: rol || 'usuario', // Permitir usuario o profesional, no administrador
       anonimo: anonimo || false,
       visibilidadPerfil: visibilidadPerfil || 'publico'
     });
