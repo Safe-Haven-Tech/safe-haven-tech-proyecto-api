@@ -50,7 +50,7 @@ class UsuariosService {
       contraseña: contraseñaEncriptada,
       nombreCompleto,
       fechaNacimiento: new Date(fechaNacimiento),
-      rol: rol || 'usuario', // Permitir usuario o profesional, no administrador
+      rol: rol || 'usuario',
       anonimo: anonimo || false,
       visibilidadPerfil: visibilidadPerfil || 'publico',
       nombreUsuario: nombreUsuario.toLowerCase(),
@@ -371,9 +371,17 @@ class UsuariosService {
     }
   
     // Validar contraseña
-    const coinciden = await bcrypt.compare(contraseña, usuario.contraseña);
+    const coinciden = await bcryp.compare(contraseña, usuario.contraseña);
     if (!coinciden) {
       throw new Error('Contraseña incorrecta');
+    }
+  
+    // Si tiene foto en Cloudinary, eliminarla
+    if (usuario.fotoPerfil) {
+      const publicId = usuario.fotoPerfil.match(/\/usuarios\/(usuario_\w+)/)?.[1];
+      if (publicId) {
+        await cloudinary.uploader.destroy(`usuarios/${publicId}`);
+      }
     }
   
     // Eliminar usuario de la DB
