@@ -1,5 +1,5 @@
 require('dotenv').config();
-
+const cloudinary = require('cloudinary').v2;
 const { conectarDB, obtenerEstadoConexion, estaConectado, cerrarConexion } = require('./database');
 
 /**
@@ -52,6 +52,12 @@ const config = {
     usuario: process.env.EMAIL_USER,
     contraseña: process.env.EMAIL_PASSWORD,
     desde: process.env.EMAIL_FROM || 'noreply@safehaven.com'
+  },
+
+  cloudinary: {
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
   }
 };
 
@@ -71,6 +77,10 @@ const validarConfiguracion = () => {
 
   if (config.servidor.entorno === 'production' && !config.email.usuario) {
     console.warn('⚠️ EMAIL_USER no está definido - funcionalidades de email no estarán disponibles');
+  }
+
+  if (!config.cloudinary.cloud_name || !config.cloudinary.api_key || !config.cloudinary.api_secret) {
+    errores.push('Cloudinary no está configurado correctamente (faltan CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY o CLOUDINARY_API_SECRET)');
   }
 
   if (errores.length > 0) {
@@ -155,6 +165,8 @@ const inicializarConfiguracion = async () => {
       throw new Error('Configuración inválida');
     }
 
+    cloudinary.config(config.cloudinary);
+
     await conectarDB();
     
     console.log('✅ Sistema de configuración inicializado correctamente');
@@ -184,7 +196,8 @@ const obtenerEstadoSistema = () => {
     configuracion: {
       jwt: !!config.jwt.secreto,
       cors: config.cors.origen,
-      logging: config.logging.nivel
+      logging: config.logging.nivel,
+      cloudinary: !!config.cloudinary.cloud_name
     }
   };
 };
@@ -198,5 +211,6 @@ module.exports = {
   obtenerEstadoConexion,
   estaConectado,
   cerrarConexion,
-  obtenerEstadoSistema
+  obtenerEstadoSistema,
+  cloudinary
 };

@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { registrarUsuario, obtenerUsuarios, obtenerUsuarioPorId, actualizarUsuario, cambiarEstadoUsuario, desactivarUsuario, activarUsuario } = require('../controllers/usuariosController');
-const { validarRegistroUsuario, validarActualizacionUsuario, validarIdMongo } = require('../middlewares/validacion');
+const { registrarUsuario, obtenerUsuarios, obtenerUsuarioPorId, actualizarUsuario, cambiarEstadoUsuario, desactivarUsuario, activarUsuario, eliminarUsuario } = require('../controllers/usuariosController');
+const { validarRegistroUsuario, validarActualizacionUsuario, validarIdMongo, validarImagenUsuario } = require('../middlewares/validacion');
 const { autenticarToken, verificarRol, verificarPropietario, verificarUsuarioActivo } = require('../middlewares/auth');
+const upload = require('../utils/multer');
 
 /**
  * @route   POST /api/usuarios/registro
@@ -30,7 +31,7 @@ router.get('/:id', autenticarToken, verificarPropietario('id'), obtenerUsuarioPo
  * @desc    Actualizar usuario
  * @access  Private (usuario propio o administrador)
  */
-router.put('/:id', autenticarToken, verificarPropietario('id'), validarIdMongo, validarActualizacionUsuario, actualizarUsuario);
+router.put('/:id', autenticarToken, verificarPropietario('id'), validarIdMongo, validarActualizacionUsuario, validarImagenUsuario, upload.single('fotoPerfil'), actualizarUsuario);
 
 /**
  * @route   PATCH /api/usuarios/:id/estado
@@ -52,5 +53,12 @@ router.patch('/:id/desactivar', autenticarToken, verificarRol('administrador'), 
  * @access  Private (solo administradores)
  */
 router.patch('/:id/activar', autenticarToken, verificarRol('administrador'), validarIdMongo, activarUsuario);
+
+/**
+ * @route   DELETE /api/usuarios/:id
+ * @desc    Eliminar usuario (requiere confirmar contraseña)
+ * @access  Private (usuario propio)
+ */
+router.delete('/:id', validarIdMongo, eliminarUsuario);
 
 module.exports = router;
