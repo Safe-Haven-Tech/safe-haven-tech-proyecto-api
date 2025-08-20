@@ -1,4 +1,5 @@
 import { cloudinary } from '../config/index.js';
+import fs from 'fs/promises';
 
 export const subirImagenCloudinary = async (filePath, usuarioId, publicIdAnterior = null) => {
     try {
@@ -12,6 +13,9 @@ export const subirImagenCloudinary = async (filePath, usuarioId, publicIdAnterio
         public_id: `usuario_${usuarioId}`, 
         overwrite: true
       });
+
+      await fs.unlink(filePath);
+      console.log(`✅ Archivo temporal eliminado: ${filePath}`)
   
       return resultado.secure_url; // URL pública de la imagen
     } catch (error) {
