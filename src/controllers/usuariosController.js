@@ -46,6 +46,21 @@ const registrarUsuario = async (req, res) => {
       });
     }
 
+    // Manejar errores de validación de rol
+    if (error.message.includes('No se permite crear usuarios con rol de administrador')) {
+      return res.status(403).json({
+        error: 'Rol no permitido',
+        detalles: error.message
+      });
+    }
+
+    if (error.message.includes('Rol no válido')) {
+      return res.status(400).json({
+        error: 'Rol no válido',
+        detalles: error.message
+      });
+    }
+
     // Manejar errores de validación de Mongoose
     if (error.name === 'ValidationError') {
       const errores = Object.values(error.errors).map(err => err.message);
