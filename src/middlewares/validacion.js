@@ -5,8 +5,19 @@ const { validarCorreo, validarContraseña, validarNombre } = require('../utils/v
  */
 const validarRegistroUsuario = (req, res, next) => {
   try {
-    const { correo, contraseña, nombreCompleto, fechaNacimiento } = req.body;
+    const { correo, contraseña, nombreCompleto, fechaNacimiento, nombreUsuario } = req.body;
     const errores = [];
+
+    if (nombreUsuario !== undefined) {
+      if (nombreUsuario.length < 2 || nombreUsuario.length > 20) {
+        errores.push('El nombre de usuario debe tener entre 2 y 20 caracteres');
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(nombreUsuario)) {
+        errores.push('El nombre de usuario solo puede contener letras, números y guion bajo');
+      }
+    }else{
+      errores.push('El nombre de usuario es obligatorio');
+    }
 
     // Validar correo
     if (!correo) {
@@ -68,10 +79,27 @@ const validarRegistroUsuario = (req, res, next) => {
  */
 const validarActualizacionUsuario = (req, res, next) => {
   try {
-    const { nombreCompleto, fechaNacimiento } = req.body;
+    const { nombreCompleto, fechaNacimiento, nombreUsuario, pronombres } = req.body;
     const errores = [];
 
-    // Validar nombre completo si se proporciona
+    if (nombreUsuario !== undefined) {
+      if (nombreUsuario.length < 5 || nombreUsuario.length > 20) {
+        errores.push('El nombre de usuario debe tener entre 2 y 20 caracteres');
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(nombreUsuario)) {
+        errores.push('El nombre de usuario solo puede contener letras, números y guion bajo');
+      }
+    }
+
+    if (pronombres !== undefined) {
+      if (pronombres.length > 15) {
+        errores.push('Los pronombres no deben exceder 15 caracteres');
+      }
+      if (!/^[a-zA-Z0-9_ ]+$/.test(pronombres)) {
+        errores.push('Los pronombres solo pueden contener letras, números, espacios o guion bajo');
+      }
+    }
+
     if (nombreCompleto !== undefined) {
       if (!validarNombre(nombreCompleto)) {
         errores.push('El nombre completo solo puede contener letras, espacios y acentos');
@@ -80,7 +108,6 @@ const validarActualizacionUsuario = (req, res, next) => {
       }
     }
 
-    // Validar fecha de nacimiento si se proporciona
     if (fechaNacimiento !== undefined) {
       const fecha = new Date(fechaNacimiento);
       if (isNaN(fecha.getTime())) {
@@ -90,7 +117,6 @@ const validarActualizacionUsuario = (req, res, next) => {
       }
     }
 
-    // Si hay errores, retornar respuesta de error
     if (errores.length > 0) {
       return res.status(400).json({
         error: 'Datos de entrada inválidos',
@@ -99,13 +125,36 @@ const validarActualizacionUsuario = (req, res, next) => {
       });
     }
 
-    // Si todo está bien, continuar
     next();
   } catch (error) {
     console.error('Error en validación de actualización:', error);
     res.status(500).json({
       error: 'Error interno del servidor',
       detalles: 'Error al validar los datos de entrada'
+    });
+  }
+};
+
+const validarImagenUsuario = async (req, res, next) => {
+  try {
+    if (req.file) {
+      const metadata = await sharp(req.file.path).metadata();
+      const { width, height } = metadata;
+
+      // Dimensiones recomendadas para ícono tipo Instagram
+      if (width < 100 || height < 100 || width > 500 || height > 500) {
+        return res.status(400).json({
+          error: 'La imagen debe tener entre 100x100 y 500x500 píxeles',
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+    next();
+  } catch (error) {
+    console.error('Error validando imagen:', error);
+    res.status(500).json({
+      error: 'Error al procesar la imagen',
+      detalles: error.message
     });
   }
 };
@@ -139,5 +188,6 @@ const validarIdMongo = (req, res, next) => {
 module.exports = {
   validarRegistroUsuario,
   validarActualizacionUsuario,
-  validarIdMongo
+  validarIdMongo,
+  validarImagenUsuario
 };

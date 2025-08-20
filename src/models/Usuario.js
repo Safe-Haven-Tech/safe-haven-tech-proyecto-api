@@ -4,6 +4,18 @@ const { validarFechaNacimiento, validarContraseña } = require('../utils/validac
 const { Schema, model } = mongoose;
 
 const UsuarioSchema = new Schema({
+  nombreUsuario: {
+    type: String,
+    required: [true, 'El nombre de usuario es obligatorio'],
+    unique: true,
+    trim: true,
+    minlength: [5, 'El nombre de usuario debe tener al menos 5 caracteres'],
+    maxlength: [20, 'El nombre de usuario no puede exceder los 20 caracteres'],
+    match: [
+      /^[a-zA-Z0-9_]+$/,
+      'El nickname solo puede contener letras, números y guion bajo'
+    ]
+  },
   correo: {
     type: String,
     required: [true, 'El correo electrónico es obligatorio'],
@@ -62,6 +74,31 @@ const UsuarioSchema = new Schema({
       message: 'La visibilidad del perfil debe ser: público o privado'
     },
     default: 'publico'
+  },
+  biografia: {
+    type: String,
+    maxlength: [500, 'La biografía no puede exceder los 500 caracteres'],
+    trim: true,
+    required: false
+  },
+  genero: {
+    type: String,
+    maxlength: [10, 'El género no puede exceder los 10 caracteres'],
+    trim: true,
+    required: [true, 'El género es obligatorio']
+  },
+  pronombres: {
+    type: String,
+    trim: true,
+    maxlength: [15, 'Los pronombres no pueden exceder los 15 caracteres'],
+    required: false
+  },
+  fotoPerfil: {
+    type: String,
+    trim: true,
+    maxlength: [1024, 'La URL de la foto de perfil no puede exceder los 1024 caracteres'],
+    required: false,
+    default: ''
   },
   seguidores: [{
     type: Schema.Types.ObjectId,

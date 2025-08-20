@@ -13,18 +13,27 @@ class UsuariosService {
    * @returns {Object} Usuario registrado sin contraseña
    */
   async registrarUsuario(datosUsuario) {
-    const { correo, contraseña, nombreCompleto, fechaNacimiento, rol, anonimo, visibilidadPerfil } = datosUsuario;
-
-    // Verificar si el usuario ya existe
+    const { correo, contraseña, nombreCompleto, fechaNacimiento, rol, anonimo, visibilidadPerfil, nombreUsuario, pronombres, biografia, genero } = datosUsuario;
+  
+    // Validar correo
     const usuarioExistente = await Usuario.findOne({ correo: correo.toLowerCase() });
     if (usuarioExistente) {
       throw new Error('El correo electrónico ya está registrado en el sistema');
     }
-
+  
+    // Validar nombre de usuario
+    if (!nombreUsuario || nombreUsuario.length > 20) {
+      throw new Error('El nombre de usuario es obligatorio y no debe superar 20 caracteres');
+    }
+    const nombreUsuarioExistente = await Usuario.findOne({ nombreUsuario: nombreUsuario.toLowerCase() });
+    if (nombreUsuarioExistente) {
+      throw new Error('El nombre de usuario ya está en uso');
+    }
+  
     // Encriptar contraseña
     const saltRounds = config.seguridad.bcryptRounds;
     const contraseñaEncriptada = await bcrypt.hash(contraseña, saltRounds);
-
+  
     // Crear nuevo usuario
     const nuevoUsuario = new Usuario({
       correo: correo.toLowerCase(),
@@ -33,18 +42,22 @@ class UsuariosService {
       fechaNacimiento: new Date(fechaNacimiento),
       rol: rol || 'usuario',
       anonimo: anonimo || false,
-      visibilidadPerfil: visibilidadPerfil || 'publico'
+      visibilidadPerfil: visibilidadPerfil || 'publico',
+      nombreUsuario: nombreUsuario.toLowerCase(),
+      pronombres: pronombres || '',
+      biografia: biografia || '',
+      genero: genero || ''
     });
-
+  
     // Guardar usuario en la base de datos
     const usuarioGuardado = await nuevoUsuario.save();
-
+  
     // Remover contraseña de la respuesta
     const usuarioResponse = usuarioGuardado.toObject();
     delete usuarioResponse.contraseña;
-
+  
     console.log(`✅ Usuario registrado exitosamente: ${usuarioGuardado.correo}`);
-
+  
     return usuarioResponse;
   }
 
@@ -146,33 +159,70 @@ class UsuariosService {
    * @returns {Object} Usuario actualizado sin contraseña
    */
   async actualizarUsuario(id, datosActualizacion) {
-    // Buscar usuario
     const usuario = await Usuario.findById(id);
     if (!usuario) {
       throw new Error('No existe un usuario con el ID proporcionado');
     }
-
-    // Preparar datos de actualización
+  
     const datosActualizar = {};
-    
+  
     if (datosActualizacion.nombreCompleto !== undefined) datosActualizar.nombreCompleto = datosActualizacion.nombreCompleto;
     if (datosActualizacion.fechaNacimiento !== undefined) datosActualizar.fechaNacimiento = new Date(datosActualizacion.fechaNacimiento);
     if (datosActualizacion.rol !== undefined) datosActualizar.rol = datosActualizacion.rol;
     if (datosActualizacion.anonimo !== undefined) datosActualizar.anonimo = datosActualizacion.anonimo;
     if (datosActualizacion.visibilidadPerfil !== undefined) datosActualizar.visibilidadPerfil = datosActualizacion.visibilidadPerfil;
     if (datosActualizacion.activo !== undefined) datosActualizar.activo = datosActualizacion.activo;
-
-    // Actualizar usuario
+    if (datosActualizacion.pronombres !== undefined) {
+      if (datosActualizacion.pronombres.length > 15) {
+        throw new Error('Los pronombres no deben exceder 15 caracteres');
+      }
+      if (!/^[a-zA-Z0-9_ ]+$/.test(datosActualizacion.pronombres)) {
+        throw new Error('Los pronombres solo pueden contener letras, números, espacios o guion bajo');
+      }
+      datosActualizar.pronombres = datosActualizacion.pronombres;
+    }
+    if (datosActualizacion.biografia !== undefined) datosActualizar.biografia = datosActualizacion.biografia;
+    if (datosActualizacion.genero !== undefined) datosActualizar.genero = datosActualizacion.genero;
+  
+    // Validar y actualizar nombreUsuario si viene
+    if (datosActualizacion.nombreUsuario !== undefined) {
+      if (!datosActualizacion.nombreUsuario || datosActualizacion.nombreUsuario.length > 20) {
+        throw new Error('El nombre de usuario es obligatorio y no debe superar 20 caracteres');
+      }
+  
+      const nombreUsuarioExistente = await Usuario.findOne({
+        nombreUsuario: datosActualizacion.nombreUsuario.toLowerCase(),
+        _id: { $ne: id } // Excluir al usuario que se está actualizando
+      });
+  
+      if (nombreUsuarioExistente) {
+        throw new Error('El nombre de usuario ya está en uso');
+      }
+  
+      if (!/^[a-zA-Z0-9_]+$/.test(datosActualizacion.nombreUsuario)) {
+        throw new Error('El nombre de usuario solo puede contener letras, números y guion bajo');
+      }
+  
+      datosActualizar.nombreUsuario = datosActualizacion.nombreUsuario.toLowerCase();
+    }
+  
+    // Actualizar fotoPerfil si viene
+    if (datosActualizacion.fotoPerfil !== undefined) {
+      datosActualizar.fotoPerfil = datosActualizacion.fotoPerfil;
+    }
+  
     const usuarioActualizado = await Usuario.findByIdAndUpdate(
       id,
       datosActualizar,
       { new: true, runValidators: true }
     ).select('-contraseña');
-
+  
     console.log(`✅ Usuario actualizado: ${usuarioActualizado.correo}`);
-
+  
     return usuarioActualizado;
   }
+  
+  
 
   /**
    * Cambiar estado del usuario
@@ -303,6 +353,25 @@ class UsuariosService {
       }, {})
     };
   }
+
+  async eliminarUsuario(id, contraseña) {
+    const usuario = await Usuario.findById(id);
+    if (!usuario) {
+      throw new Error('No existe un usuario con el ID proporcionado');
+    }
+  
+    // Validar contraseña
+    const coinciden = await bcrypt.compare(contraseña, usuario.contraseña);
+    if (!coinciden) {
+      throw new Error('Contraseña incorrecta');
+    }
+  
+    // Eliminar usuario de la DB
+    await Usuario.findByIdAndDelete(id);
+  
+    console.log(`✅ Usuario eliminado: ${usuario.correo}`);
+    return true;
+  }  
 }
 
 module.exports = new UsuariosService();
