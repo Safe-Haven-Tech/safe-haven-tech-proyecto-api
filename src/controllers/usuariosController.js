@@ -1,7 +1,7 @@
 const usuariosService = require('../services/usuariosService');
+const Usuario = require('../models/Usuario');
+
 const { config } = require('../config');
-const { subirImagenCloudinary, eliminarImagenCloudinary } = require('../utils/cloudinary');
-const bcrypt = require('bcrypt');
 
 /**
  * @desc    Registrar un nuevo usuario
@@ -10,13 +10,13 @@ const bcrypt = require('bcrypt');
  */
 const registrarUsuario = async (req, res) => {
   try {
-    const { correo, contraseña, nombreCompleto, fechaNacimiento, rol, anonimo, visibilidadPerfil, genero, nombreUsuario } = req.body;
+    const { correo, contraseña, nombreCompleto, fechaNacimiento, rol, anonimo, visibilidadPerfil } = req.body;
 
     // Validar campos requeridos
-    if (!correo || !contraseña || !nombreCompleto || !fechaNacimiento || !genero || !nombreUsuario) {
+    if (!correo || !contraseña || !nombreCompleto || !fechaNacimiento) {
       return res.status(400).json({
         error: 'Campos requeridos faltantes',
-        detalles: 'correo, contraseña, nombreCompleto, fechaNacimiento, genero y nombreUsuario son obligatorios'
+        detalles: 'correo, contraseña, nombreCompleto y fechaNacimiento son obligatorios'
       });
     }
 
@@ -28,9 +28,7 @@ const registrarUsuario = async (req, res) => {
       fechaNacimiento,
       rol,
       anonimo,
-      visibilidadPerfil,
-      genero,
-      nombreUsuario
+      visibilidadPerfil
     });
 
     res.status(201).json({
@@ -74,6 +72,7 @@ const registrarUsuario = async (req, res) => {
       });
     }
 
+    // Error por defecto
     res.status(500).json({
       error: 'Error interno del servidor',
       detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
@@ -90,6 +89,7 @@ const obtenerUsuarios = async (req, res) => {
   try {
     const { pagina = 1, limite = 10, rol, activo, estado, busqueda } = req.query;
     
+    // Construir filtros
     const filtros = {};
     
     if (rol) filtros.rol = rol;
@@ -99,6 +99,7 @@ const obtenerUsuarios = async (req, res) => {
       filtros.busqueda = busqueda;
     }
 
+    // Usar el servicio para obtener usuarios
     const resultado = await usuariosService.obtenerUsuarios(filtros, pagina, limite);
 
     res.json({
@@ -124,6 +125,7 @@ const obtenerUsuarioPorId = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Usar el servicio para obtener el usuario
     const usuario = await usuariosService.obtenerUsuarioPorId(id);
 
     res.json({
@@ -155,6 +157,74 @@ const obtenerUsuarioPorId = async (req, res) => {
   }
 };
 
+
+
+
+const obtenerUsuarioPublico = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Obtener solo información pública (sin datos sensibles)
+    const usuario = await Usuario.findById(id)
+      .select('nombreCompleto fotoPerfil visibilidadPerfil biografia genero pronombres rol createdAt seguidores seguidos')
+      .where('activo').equals(true)
+      .where('estado').equals('activo');
+
+    if (!usuario) {
+      return res.status(404).json({
+        error: 'Usuario no encontrado',
+        detalles: 'No existe un usuario activo con el ID proporcionado'
+      });
+    }
+
+    // Si el perfil es privado, restringir acceso
+    if (usuario.visibilidadPerfil === 'privado') {
+      return res.status(403).json({
+        error: 'Perfil privado',
+        detalles: 'Este perfil es privado. Solo el usuario puede verlo.'
+      });
+    }
+
+    // Preparar respuesta con información pública
+    const usuarioPublico = {
+      _id: usuario._id,
+      nombreCompleto: usuario.nombreCompleto,
+      fotoPerfil: usuario.fotoPerfil,
+      biografia: usuario.biografia,
+      genero: usuario.genero,
+      pronombres: usuario.pronombres,
+      rol: usuario.rol,
+      visibilidadPerfil: usuario.visibilidadPerfil,
+      seguidores: usuario.seguidores || [],
+      seguidos: usuario.seguidos || [],
+      createdAt: usuario.createdAt,
+      // Estadísticas públicas
+      totalSeguidores: usuario.seguidores ? usuario.seguidores.length : 0,
+      totalSeguidos: usuario.seguidos ? usuario.seguidos.length : 0
+    };
+
+    res.json({
+      usuario: usuarioPublico,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error al obtener usuario público:', error);
+    
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        error: 'ID inválido',
+        detalles: 'El formato del ID proporcionado no es válido'
+      });
+    }
+
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+    });
+  }
+};
+
 /**
  * @desc    Actualizar usuario
  * @route   PUT /api/usuarios/:id
@@ -163,28 +233,9 @@ const obtenerUsuarioPorId = async (req, res) => {
 const actualizarUsuario = async (req, res) => {
   try {
     const { id } = req.params;
-    const { 
-      nombreCompleto, 
-      fechaNacimiento, 
-      rol, 
-      anonimo, 
-      visibilidadPerfil, 
-      activo,
-      pronombres,
-      biografia,
-      genero,
-      nombreUsuario
-    } = req.body;
+    const { nombreCompleto, fechaNacimiento, rol, anonimo, visibilidadPerfil, activo } = req.body;
 
-
-    const usuario = await usuariosService.obtenerUsuarioPorId(id);
-    if (!usuario) {
-      return res.status(404).json({
-        error: 'Usuario no encontrado',
-        detalles: 'No existe un usuario con el ID proporcionado'
-      });
-    }
-
+    // Preparar datos de actualización
     const datosActualizacion = {};
     
     if (nombreCompleto !== undefined) datosActualizacion.nombreCompleto = nombreCompleto;
@@ -193,17 +244,8 @@ const actualizarUsuario = async (req, res) => {
     if (anonimo !== undefined) datosActualizacion.anonimo = anonimo;
     if (visibilidadPerfil !== undefined) datosActualizacion.visibilidadPerfil = visibilidadPerfil;
     if (activo !== undefined) datosActualizacion.activo = activo;
-    if (pronombres !== undefined) datosActualizacion.pronombres = pronombres;
-    if (biografia !== undefined) datosActualizacion.biografia = biografia;
-    if (genero !== undefined) datosActualizacion.genero = genero;
-    if (nombreUsuario !== undefined) datosActualizacion.nombreUsuario = nombreUsuario;
 
-    if (req.file) {
-      const publicIdAnterior = usuario.fotoPerfil?.match(/\/usuarios\/(usuario_\w+)/)?.[1];
-      const urlImagen = await subirImagenCloudinary(req.file.path, id, publicIdAnterior);
-      datosActualizacion.fotoPerfil = urlImagen;
-    }
-
+    // Usar el servicio para actualizar el usuario
     const usuarioActualizado = await usuariosService.actualizarUsuario(id, datosActualizacion);
 
     res.json({
@@ -261,6 +303,7 @@ const cambiarEstadoUsuario = async (req, res) => {
       });
     }
 
+    // Usar el servicio para cambiar el estado del usuario
     const usuarioActualizado = await usuariosService.cambiarEstadoUsuario(id, estado, motivo);
 
     res.json({
@@ -310,6 +353,7 @@ const desactivarUsuario = async (req, res) => {
     const { id } = req.params;
     const { motivo } = req.body;
 
+    // Usar el servicio para desactivar el usuario
     const usuarioDesactivado = await usuariosService.desactivarUsuario(id, motivo);
 
     res.json({
@@ -351,7 +395,8 @@ const activarUsuario = async (req, res) => {
   try {
     const { id } = req.params;
     const { motivo } = req.body;
-        // Usar el servicio para activar el usuario
+
+    // Usar el servicio para activar el usuario
     const usuarioActivado = await usuariosService.activarUsuario(id, motivo);
 
     res.json({
@@ -384,58 +429,13 @@ const activarUsuario = async (req, res) => {
   }
 };
 
-const eliminarUsuario = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { contraseña } = req.body;
-
-    if (!contraseña) {
-      return res.status(400).json({
-        error: 'Contraseña requerida',
-        detalles: 'Debes proporcionar tu contraseña para confirmar la eliminación'
-      });
-    }
-
-    // Obtener usuario actual
-    const usuario = await usuariosService.obtenerUsuarioPorId(id);
-
-    if (!usuario) {
-      return res.status(404).json({
-        error: 'Usuario no encontrado',
-        detalles: `No existe un usuario con ID ${id}`
-      });
-    }
-
-    // Si tiene foto en Cloudinary, eliminarla
-    if (usuario.fotoPerfil) {
-      const publicId = usuario.fotoPerfil.match(/\/usuarios\/(usuario_\w+)/)?.[1];
-      await eliminarImagenCloudinary(publicId);
-    }
-
-    // Eliminar usuario
-    await usuariosService.eliminarUsuario(id, contraseña);
-
-    res.json({
-      mensaje: 'Usuario eliminado exitosamente',
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('❌ Error al eliminar usuario:', error);
-    res.status(500).json({
-      error: 'Error interno del servidor',
-      detalles: error.message
-    });
-  }
-};
-
 module.exports = {
   registrarUsuario,
   obtenerUsuarios,
   obtenerUsuarioPorId,
+  obtenerUsuarioPublico,  
   actualizarUsuario,
   cambiarEstadoUsuario,
   desactivarUsuario,
-  activarUsuario,
-  eliminarUsuario
+  activarUsuario
 };

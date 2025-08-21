@@ -1,9 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const { registrarUsuario, obtenerUsuarios, obtenerUsuarioPorId, actualizarUsuario, cambiarEstadoUsuario, desactivarUsuario, activarUsuario, eliminarUsuario } = require('../controllers/usuariosController');
-const { validarRegistroUsuario, validarActualizacionUsuario, validarIdMongo, validarImagenUsuario } = require('../middlewares/validacion');
+const { 
+  registrarUsuario, 
+  obtenerUsuarios, 
+  obtenerUsuarioPorId, 
+  actualizarUsuario, 
+  cambiarEstadoUsuario, 
+  desactivarUsuario, 
+  activarUsuario,
+  obtenerUsuarioPublico
+} = require('../controllers/usuariosController');
+
+// CORREGIR - usa middlewares en plural
+const { validarRegistroUsuario, validarActualizacionUsuario, validarIdMongo } = require('../middlewares/validacion');
+
+// CORREGIR - también auth.js está en middlewares
 const { autenticarToken, verificarRol, verificarPropietario, verificarUsuarioActivo } = require('../middlewares/auth');
-const upload = require('../utils/multer');
 
 /**
  * @route   POST /api/usuarios/registro
@@ -11,6 +23,13 @@ const upload = require('../utils/multer');
  * @access  Public
  */
 router.post('/registro', validarRegistroUsuario, registrarUsuario);
+
+/**
+ * @route   GET /api/usuarios/public/:id
+ * @desc    Obtener información pública de un usuario
+ * @access  Public
+ */
+router.get('/public/:id', validarIdMongo, obtenerUsuarioPublico);
 
 /**
  * @route   GET /api/usuarios
@@ -21,7 +40,7 @@ router.get('/', autenticarToken, verificarRol('administrador'), obtenerUsuarios)
 
 /**
  * @route   GET /api/usuarios/:id
- * @desc    Obtener usuario por ID
+ * @desc    Obtener usuario por ID (información completa)
  * @access  Private (usuario propio o administrador)
  */
 router.get('/:id', autenticarToken, verificarPropietario('id'), obtenerUsuarioPorId);
@@ -31,7 +50,7 @@ router.get('/:id', autenticarToken, verificarPropietario('id'), obtenerUsuarioPo
  * @desc    Actualizar usuario
  * @access  Private (usuario propio o administrador)
  */
-router.put('/:id', autenticarToken, verificarPropietario('id'), validarIdMongo, validarActualizacionUsuario, validarImagenUsuario, upload.single('fotoPerfil'), actualizarUsuario);
+router.put('/:id', autenticarToken, verificarPropietario('id'), validarIdMongo, validarActualizacionUsuario, actualizarUsuario);
 
 /**
  * @route   PATCH /api/usuarios/:id/estado
@@ -53,12 +72,5 @@ router.patch('/:id/desactivar', autenticarToken, verificarRol('administrador'), 
  * @access  Private (solo administradores)
  */
 router.patch('/:id/activar', autenticarToken, verificarRol('administrador'), validarIdMongo, activarUsuario);
-
-/**
- * @route   DELETE /api/usuarios/:id
- * @desc    Eliminar usuario (requiere confirmar contraseña)
- * @access  Private (usuario propio)
- */
-router.delete('/:id', validarIdMongo, eliminarUsuario);
 
 module.exports = router;
