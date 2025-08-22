@@ -1,6 +1,7 @@
 const usuariosService = require('../services/usuariosService');
 const { config } = require('../config');
 const { subirImagenCloudinary, eliminarImagenCloudinary } = require('../utils/cloudinary');
+const Usuario = require('../models/Usuario');
 const bcrypt = require('bcrypt');
 
 /**
@@ -202,6 +203,10 @@ const actualizarUsuario = async (req, res) => {
       const publicIdAnterior = usuario.fotoPerfil?.match(/\/usuarios\/(usuario_\w+)/)?.[1];
       const urlImagen = await subirImagenCloudinary(req.file.path, id, publicIdAnterior);
       datosActualizacion.fotoPerfil = urlImagen;
+    }
+
+    if ('fotoPerfil' in req.body && req.body.fotoPerfil === null) {
+      datosActualizacion.fotoPerfil = null;
     }
 
     const usuarioActualizado = await usuariosService.actualizarUsuario(id, datosActualizacion);
@@ -429,6 +434,174 @@ const eliminarUsuario = async (req, res) => {
   }
 };
 
+const obtenerUsuarioPublico = async (req, res) => {
+ try {
+   const { nickname } = req.params;
+
+   // Obtener información del usuario solicitado por nombre de usuario
+   const usuario = await Usuario.findOne({ nombreUsuario: nickname.toLowerCase() })
+     .select('nombreUsuario nombreCompleto fotoPerfil visibilidadPerfil biografia genero pronombres rol createdAt seguidores seguidos activo estado')
+     .where('activo').equals(true)
+     .where('estado').equals('activo');
+
+   if (!usuario) {
+     return res.status(404).json({
+       error: 'Usuario no encontrado',
+       detalles: 'No existe un usuario activo con ese nickname'
+     });
+   }
+
+   // ✅ Verificar si el usuario autenticado es el dueño
+   let esPropietario = false;
+   const authHeader = req.headers.authorization;
+   if (authHeader && authHeader.startsWith('Bearer ')) {
+     const token = authHeader.split(' ')[1];
+     try {
+       const jwt = require('jsonwebtoken');
+       const { config } = require('../config');
+       const decoded = jwt.verify(token, config.jwt.secret);
+
+       esPropietario = decoded.id === usuario._id.toString();
+     } catch (error) {
+       // Token inválido -> no propietario
+     }
+   }
+
+   // ✅ Respetar visibilidad del perfil
+   // TODO FUTURO: Cuando se implemente la funcionalidad de seguir, modificar esta lógica para:
+   // 1. Verificar si el usuario autenticado sigue a este perfil privado
+   // 2. Si es seguidor, mostrar información completa aunque sea privado
+   // 3. La lógica sería: if (privado && !propietario && !esSeguidor) -> mostrar limitado
+
+   let usuarioPublico;
+
+   if (usuario.visibilidadPerfil === 'privado' && !esPropietario) {
+     // PERFIL PRIVADO - Solo información básica (sin posts, sin bio, sin seguidores)
+     // TODO FUTURO: Aquí verificar si decoded.id está en usuario.seguidores[]
+     // Si es seguidor, pasar al else para mostrar información completa
+     usuarioPublico = {
+       _id: usuario._id,
+       nombreUsuario: usuario.nombreUsuario,
+       nombreCompleto: usuario.nombreCompleto,
+       fotoPerfil: usuario.fotoPerfil,
+       visibilidadPerfil: usuario.visibilidadPerfil,
+       rol: usuario.rol,
+       pronombres: usuario.pronombres,
+       createdAt: usuario.createdAt,
+       // Información limitada para perfiles privados
+       biografia: '', // Ocultar bio
+       seguidores: [], // Ocultar lista de seguidores
+       seguidos: [], // Ocultar lista de seguidos
+       totalSeguidores: 0, // Ocultar contador
+       totalSeguidos: 0 // Ocultar contador
+       // TODO FUTURO: Agregar campo "posts: []" cuando se implemente posts
+     };
+   } else {
+     // PERFIL PÚBLICO o PROPIO - Información completa
+     // TODO FUTURO: También llegará aquí si es privado pero el usuario es seguidor
+     usuarioPublico = {
+       _id: usuario._id,
+       nombreUsuario: usuario.nombreUsuario,
+       nombreCompleto: usuario.nombreCompleto,
+       fotoPerfil: usuario.fotoPerfil,
+       biografia: usuario.biografia,
+       genero: usuario.genero,
+       pronombres: usuario.pronombres,
+       rol: usuario.rol,
+       visibilidadPerfil: usuario.visibilidadPerfil,
+       seguidores: usuario.seguidores || [],
+       seguidos: usuario.seguidos || [],
+       createdAt: usuario.createdAt,
+       totalSeguidores: usuario.seguidores ? usuario.seguidores.length : 0,
+       totalSeguidos: usuario.seguidos ? usuario.seguidos.length : 0
+       // TODO FUTURO: Agregar posts del usuario cuando se implemente la funcionalidad
+     };
+   }
+
+   // TODO FUTURO: Cuando se implemente funcionalidad de seguir:
+   // 1. Crear endpoint POST /api/usuarios/:id/seguir para seguir/dejar de seguir
+   // 2. Modificar esta función para verificar si decoded.id está en usuario.seguidores
+   // 3. Actualizar frontend para que handleFollowToggle funcione correctamente
+   // 4. Considerar notificaciones cuando alguien te sigue
+
+   res.json({
+     usuario: usuarioPublico,
+     timestamp: new Date().toISOString()
+   });
+
+ } catch (error) {
+   console.error('❌ Error al obtener usuario público por nickname:', error);
+
+   if (error.name === 'CastError') {
+     return res.status(400).json({
+       error: 'Nickname inválido',
+       detalles: 'El formato del nickname proporcionado no es válido'
+     });
+   }
+
+   res.status(500).json({
+     error: 'Error interno del servidor',
+     detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+   });
+ }
+};
+
+
+/**
+ * @desc    Verificar disponibilidad de nickname
+ * @route   GET /api/usuarios/verificar-nickname/:nickname
+ * @access  Private (usuario autenticado)
+ */
+const verificarNickname = async (req, res) => {
+  try {
+    const { nickname } = req.params;
+    
+    if (!nickname) {
+      return res.status(400).json({
+        error: 'Nickname requerido',
+        detalles: 'Debe proporcionar un nickname para verificar'
+      });
+    }
+
+    // Validar formato del nickname
+    const regex = /^[a-zA-Z0-9_]+$/;
+    if (!regex.test(nickname)) {
+      return res.status(400).json({
+        error: 'Formato inválido',
+        detalles: 'El nickname solo puede contener letras, números y guion bajo'
+      });
+    }
+
+    if (nickname.length < 5 || nickname.length > 20) {
+      return res.status(400).json({
+        error: 'Longitud inválida',
+        detalles: 'El nickname debe tener entre 5 y 20 caracteres'
+      });
+    }
+
+    // Buscar si el nickname ya existe (excluyendo al usuario actual)
+    const usuarioExistente = await Usuario.findOne({
+      nombreUsuario: nickname,
+      _id: { $ne: req.usuario.userId } // Excluir al usuario actual
+    });
+
+    res.json({
+      disponible: !usuarioExistente,
+      nickname: nickname,
+      mensaje: usuarioExistente ? 'Nickname no disponible' : 'Nickname disponible'
+    });
+
+  } catch (error) {
+    console.error('❌ Error al verificar nickname:', error);
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: 'Error al verificar la disponibilidad del nickname'
+    });
+  }
+};
+
+
+
 module.exports = {
   registrarUsuario,
   obtenerUsuarios,
@@ -437,5 +610,7 @@ module.exports = {
   cambiarEstadoUsuario,
   desactivarUsuario,
   activarUsuario,
-  eliminarUsuario
+  eliminarUsuario,
+  obtenerUsuarioPublico,
+  verificarNickname
 };

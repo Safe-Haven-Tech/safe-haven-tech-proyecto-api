@@ -8,8 +8,12 @@ const {
   cambiarEstadoUsuario, 
   desactivarUsuario, 
   activarUsuario,
-  obtenerUsuarioPublico
+  obtenerUsuarioPublico,
+  eliminarUsuario,
+  verificarNickname
 } = require('../controllers/usuariosController');
+
+const upload = require('../utils/multer');
 
 // CORREGIR - usa middlewares en plural
 const { validarRegistroUsuario, validarActualizacionUsuario, validarIdMongo } = require('../middlewares/validacion');
@@ -29,7 +33,7 @@ router.post('/registro', validarRegistroUsuario, registrarUsuario);
  * @desc    Obtener información pública de un usuario
  * @access  Public
  */
-router.get('/public/:id', validarIdMongo, obtenerUsuarioPublico);
+router.get('/public/:nickname', obtenerUsuarioPublico);
 
 /**
  * @route   GET /api/usuarios
@@ -50,8 +54,7 @@ router.get('/:id', autenticarToken, verificarPropietario('id'), obtenerUsuarioPo
  * @desc    Actualizar usuario
  * @access  Private (usuario propio o administrador)
  */
-router.put('/:id', autenticarToken, verificarPropietario('id'), validarIdMongo, validarActualizacionUsuario, actualizarUsuario);
-
+router.put('/:id', autenticarToken, verificarPropietario('id'), validarIdMongo, upload.single('fotoPerfil'), validarActualizacionUsuario, actualizarUsuario);
 /**
  * @route   PATCH /api/usuarios/:id/estado
  * @desc    Cambiar estado del usuario
@@ -72,5 +75,12 @@ router.patch('/:id/desactivar', autenticarToken, verificarRol('administrador'), 
  * @access  Private (solo administradores)
  */
 router.patch('/:id/activar', autenticarToken, verificarRol('administrador'), validarIdMongo, activarUsuario);
+
+/**
+ * @route   GET /api/usuarios/verificar-nickname/:nickname
+ * @desc    Verificar disponibilidad de nickname
+ * @access  Private (usuario autenticado)
+ */
+router.get('/verificar-nickname/:nickname', autenticarToken, verificarNickname);
 
 module.exports = router;
