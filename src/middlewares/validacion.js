@@ -33,14 +33,6 @@ const validarRegistroUsuario = (req, res, next) => {
       errores.push('La contraseña debe tener entre 8 y 128 caracteres, incluyendo al menos una mayúscula, una minúscula y un número');
     }
 
-    // Validar nombre completo
-    if (!nombreCompleto) {
-      errores.push('El nombre completo es obligatorio');
-    } else if (!validarNombre(nombreCompleto)) {
-      errores.push('El nombre completo solo puede contener letras, espacios y acentos');
-    } else if (nombreCompleto.length < 2 || nombreCompleto.length > 100) {
-      errores.push('El nombre completo debe tener entre 2 y 100 caracteres');
-    }
 
     // Validar fecha de nacimiento
     if (!fechaNacimiento) {
@@ -82,33 +74,37 @@ const validarActualizacionUsuario = (req, res, next) => {
     const { nombreCompleto, fechaNacimiento, nombreUsuario, pronombres } = req.body;
     const errores = [];
 
-    if (nombreUsuario !== undefined) {
+    // nombreUsuario obligatorio
+    if (!nombreUsuario || nombreUsuario.trim() === '') {
+      errores.push('El nombre de usuario es obligatorio');
+    } else {
       if (nombreUsuario.length < 5 || nombreUsuario.length > 20) {
-        errores.push('El nombre de usuario debe tener entre 2 y 20 caracteres');
+        errores.push('El nombre de usuario debe tener entre 5 y 20 caracteres');
       }
       if (!/^[a-zA-Z0-9_]+$/.test(nombreUsuario)) {
         errores.push('El nombre de usuario solo puede contener letras, números y guion bajo');
       }
     }
 
-    if (pronombres !== undefined) {
-      if (pronombres.length > 15) {
-        errores.push('Los pronombres no deben exceder 15 caracteres');
-      }
+    // pronombres opcionales
+    if (pronombres) {
+      if (pronombres.length > 15) errores.push('Los pronombres no deben exceder 15 caracteres');
       if (!/^[a-zA-Z0-9_ ]+$/.test(pronombres)) {
         errores.push('Los pronombres solo pueden contener letras, números, espacios o guion bajo');
       }
     }
 
-    if (nombreCompleto !== undefined) {
-      if (!validarNombre(nombreCompleto)) {
+    // nombreCompleto opcional
+    if (nombreCompleto) {
+      if (!/^[a-zA-ZÀ-ÿ\s]+$/.test(nombreCompleto)) {
         errores.push('El nombre completo solo puede contener letras, espacios y acentos');
       } else if (nombreCompleto.length < 2 || nombreCompleto.length > 100) {
         errores.push('El nombre completo debe tener entre 2 y 100 caracteres');
       }
     }
 
-    if (fechaNacimiento !== undefined) {
+    // fechaNacimiento opcional
+    if (fechaNacimiento) {
       const fecha = new Date(fechaNacimiento);
       if (isNaN(fecha.getTime())) {
         errores.push('La fecha de nacimiento debe ser una fecha válida');
@@ -134,6 +130,10 @@ const validarActualizacionUsuario = (req, res, next) => {
     });
   }
 };
+
+module.exports = { validarActualizacionUsuario };
+
+
 
 const validarImagenUsuario = async (req, res, next) => {
   try {

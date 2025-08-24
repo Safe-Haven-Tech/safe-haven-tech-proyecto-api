@@ -14,11 +14,7 @@ const {
 } = require('../controllers/usuariosController');
 
 const upload = require('../utils/multer');
-
-// CORREGIR - usa middlewares en plural
 const { validarRegistroUsuario, validarActualizacionUsuario, validarIdMongo } = require('../middlewares/validacion');
-
-// CORREGIR - también auth.js está en middlewares
 const { autenticarToken, verificarRol, verificarPropietario, verificarUsuarioActivo } = require('../middlewares/auth');
 
 /**
@@ -29,8 +25,15 @@ const { autenticarToken, verificarRol, verificarPropietario, verificarUsuarioAct
 router.post('/registro', validarRegistroUsuario, registrarUsuario);
 
 /**
- * @route   GET /api/usuarios/public/:id
- * @desc    Obtener información pública de un usuario
+ * @route   GET /api/usuarios/verificar-nickname/:nickname
+ * @desc    Verificar disponibilidad de nickname (AHORA PÚBLICO)
+ * @access  Public
+ */
+router.get('/verificar-nickname/:nickname', verificarNickname);
+
+/**
+ * @route   GET /api/usuarios/public/:nickname
+ * @desc    Obtener información pública de un usuario por nickname
  * @access  Public
  */
 router.get('/public/:nickname', obtenerUsuarioPublico);
@@ -55,6 +58,7 @@ router.get('/:id', autenticarToken, verificarPropietario('id'), obtenerUsuarioPo
  * @access  Private (usuario propio o administrador)
  */
 router.put('/:id', autenticarToken, verificarPropietario('id'), validarIdMongo, upload.single('fotoPerfil'), validarActualizacionUsuario, actualizarUsuario);
+
 /**
  * @route   PATCH /api/usuarios/:id/estado
  * @desc    Cambiar estado del usuario
@@ -77,10 +81,10 @@ router.patch('/:id/desactivar', autenticarToken, verificarRol('administrador'), 
 router.patch('/:id/activar', autenticarToken, verificarRol('administrador'), validarIdMongo, activarUsuario);
 
 /**
- * @route   GET /api/usuarios/verificar-nickname/:nickname
- * @desc    Verificar disponibilidad de nickname
- * @access  Private (usuario autenticado)
+ * @route   DELETE /api/usuarios/:id
+ * @desc    Eliminar usuario
+ * @access  Private (usuario propio o administrador)
  */
-router.get('/verificar-nickname/:nickname', autenticarToken, verificarNickname);
+router.delete('/:id', autenticarToken, verificarPropietario('id'), validarIdMongo, eliminarUsuario);
 
 module.exports = router;
