@@ -4,6 +4,7 @@ const router = express.Router();
 // Importar rutas
 const usuariosRoutes = require('./usuarios');
 const authRoutes = require('./auth');
+const encuestasRoutes = require('./encuestas');
 
 // Importar controladores del sistema
 const { obtenerHealthCheck, obtenerInformacionSistema, obtenerEstadisticasSistema } = require('../controllers/sistemaController');
@@ -11,6 +12,7 @@ const { obtenerHealthCheck, obtenerInformacionSistema, obtenerEstadisticasSistem
 // Definir rutas base
 router.use('/usuarios', usuariosRoutes);
 router.use('/auth', authRoutes);
+router.use('/encuestas', encuestasRoutes);
 
 // Ruta de prueba/health check
 router.get('/health', obtenerHealthCheck);

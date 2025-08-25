@@ -8,7 +8,7 @@ const {
   cambiarEstadoUsuario, 
   desactivarUsuario, 
   activarUsuario,
-  obtenerUsuarioPublico
+  //obtenerUsuarioPublico
 } = require('../controllers/usuariosController');
 
 // CORREGIR - usa middlewares en plural
@@ -29,7 +29,7 @@ router.post('/registro', validarRegistroUsuario, registrarUsuario);
  * @desc    Obtener información pública de un usuario
  * @access  Public
  */
-router.get('/public/:id', validarIdMongo, obtenerUsuarioPublico);
+//router.get('/public/:id', validarIdMongo, obtenerUsuarioPublico);
 
 /**
  * @route   GET /api/usuarios
