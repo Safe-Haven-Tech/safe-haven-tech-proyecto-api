@@ -371,7 +371,7 @@ class UsuariosService {
     }
   
     // Validar contraseña
-    const coinciden = await bcryp.compare(contraseña, usuario.contraseña);
+    const coinciden = await bcrypt.compare(contraseña, usuario.contraseña);
     if (!coinciden) {
       throw new Error('Contraseña incorrecta');
     }

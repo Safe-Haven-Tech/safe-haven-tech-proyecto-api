@@ -3,6 +3,9 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { config } = require('../config');
 
+//  Añadir blacklist básica para tokens invalidados
+const tokenBlacklist = new Set();
+
 /**
  * Servicio para el manejo de autenticación
  */
@@ -64,8 +67,9 @@ class AuthService {
    */
   generarAccessToken(usuario) {
     const payload = {
-      id: usuario._id,
+      id: usuario._id.toString(),
       correo: usuario.correo,
+      nombreUsuario: usuario.nombreUsuario, //  AÑADIDO: nickname en el token
       rol: usuario.rol,
       tipo: 'access'
     };
@@ -82,8 +86,9 @@ class AuthService {
    */
   generarRefreshToken(usuario) {
     const payload = {
-      id: usuario._id,
+      id: usuario._id.toString(),
       correo: usuario.correo,
+      nombreUsuario: usuario.nombreUsuario, //  AÑADIDO: nickname en el refresh token también
       tipo: 'refresh'
     };
 
@@ -105,6 +110,8 @@ class AuthService {
         throw new Error('Tipo de token inválido');
       }
 
+
+
       return decoded;
     } catch (error) {
       if (error.name === 'TokenExpiredError') {
@@ -114,6 +121,16 @@ class AuthService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Invalidar tokens del usuario
+   * @param {string} userId - ID del usuario
+   */
+  invalidarTokens(userId) {
+    //  Añadir usuario a la blacklist
+    tokenBlacklist.add(userId);
+    console.log(`✅ Tokens invalidados para usuario: ${userId}`);
   }
 
   /**
@@ -130,6 +147,7 @@ class AuthService {
         throw new Error('Tipo de token inválido');
       }
 
+
       // Buscar usuario
       const usuario = await Usuario.findById(decoded.id);
       if (!usuario || !usuario.activo || usuario.estado !== 'activo') {
@@ -139,7 +157,7 @@ class AuthService {
       // Generar nuevo access token
       const nuevoAccessToken = this.generarAccessToken(usuario);
 
-      console.log(`✅ Token refrescado para: ${usuario.correo}`);
+      console.log(` Token refrescado para: ${usuario.correo}`);
 
       return {
         accessToken: nuevoAccessToken,
@@ -163,10 +181,8 @@ class AuthService {
    */
   async cerrarSesion(userId) {
     try {
-      // Aquí podrías implementar lógica adicional como:
-      // - Agregar el token a una blacklist
-      // - Registrar el logout en logs
-      // - Actualizar último logout del usuario
+      //  Invalidar tokens al cerrar sesión
+      this.invalidarTokens(userId);
 
       console.log(`✅ Sesión cerrada para usuario: ${userId}`);
       return true;
@@ -181,41 +197,44 @@ class AuthService {
    * @param {string} userId - ID del usuario
    * @param {string} contraseñaActual - Contraseña actual
    * @param {string} nuevaContraseña - Nueva contraseña
-   * @returns {Object} Usuario actualizado
+   * @returns {Object} Usuario actualizado + tokens
    */
-  async cambiarContraseña(userId, contraseñaActual, nuevaContraseña) {
-    // Buscar usuario
-    const usuario = await Usuario.findById(userId);
-    if (!usuario) {
-      throw new Error('Usuario no encontrado');
+    async cambiarContraseña(userId, contraseñaActual, nuevaContraseña) {
+      // Buscar usuario
+      const usuario = await Usuario.findById(userId);
+      if (!usuario) {
+        throw new Error('Usuario no encontrado');
+      }
+
+      // Verificar contraseña actual
+      const contraseñaValida = await bcrypt.compare(contraseñaActual, usuario.contraseña);
+      if (!contraseñaValida) {
+        throw new Error('Contraseña actual incorrecta');
+      }
+
+      // Encriptar nueva contraseña
+      const saltRounds = config.seguridad.bcryptRounds;
+      const nuevaContraseñaEncriptada = await bcrypt.hash(nuevaContraseña, saltRounds);
+
+      // Actualizar contraseña
+      const usuarioActualizado = await Usuario.findByIdAndUpdate(
+        userId,
+        {
+          contraseña: nuevaContraseñaEncriptada,
+          contraseñaCambiadaEn: new Date()
+        },
+        { new: true }
+      ).select('-contraseña');
+
+      // Generar tokens nuevos
+      const accessToken = this.generarAccessToken(usuario);
+      const refreshToken = this.generarRefreshToken(usuario);
+
+      console.log(`✅ Contraseña cambiada para: ${usuario.correo}`);
+
+      return { usuarioActualizado, accessToken, refreshToken };
     }
-
-    // Verificar contraseña actual
-    const contraseñaValida = await bcrypt.compare(contraseñaActual, usuario.contraseña);
-    if (!contraseñaValida) {
-      throw new Error('Contraseña actual incorrecta');
-    }
-
-    // Encriptar nueva contraseña
-    const saltRounds = config.seguridad.bcryptRounds;
-    const nuevaContraseñaEncriptada = await bcrypt.hash(nuevaContraseña, saltRounds);
-
-    // Actualizar contraseña
-    const usuarioActualizado = await Usuario.findByIdAndUpdate(
-      userId,
-      {
-        contraseña: nuevaContraseñaEncriptada,
-        contraseñaCambiadaEn: new Date()
-      },
-      { new: true }
-    ).select('-contraseña');
-
-    console.log(`✅ Contraseña cambiada para: ${usuario.correo}`);
-
-    return usuarioActualizado;
-  }
-
-  /**
+      /**
    * Obtener información del usuario desde el token
    * @param {string} token - Access token
    * @returns {Object} Información del usuario
