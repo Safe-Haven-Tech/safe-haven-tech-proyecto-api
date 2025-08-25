@@ -175,7 +175,7 @@ const generarHTMLEncuesta = (respuesta, encuesta) => {
             <div>${new Date(respuesta.fechaCompletado).toLocaleDateString('es-ES')}</div>
           </div>
           <div class="info-item">
-            <div class="info-label">Categoría:</div>
+            <div class="info-label">Categoría encuesta:</div>
             <div>${encuesta.categoria}</div>
           </div>
           ${respuesta.tiempoCompletado ? `
