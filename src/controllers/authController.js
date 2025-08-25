@@ -144,16 +144,19 @@ const cambiarContraseña = async (req, res) => {
       });
     }
 
-    // Cambiar contraseña
-    const usuarioActualizado = await authService.cambiarContraseña(
-      userId, 
-      contraseñaActual, 
-      nuevaContraseña
-    );
+    // Cambiar contraseña y generar tokens nuevos
+    const { usuarioActualizado, accessToken, refreshToken } =
+      await authService.cambiarContraseña(
+        userId,
+        contraseñaActual,
+        nuevaContraseña
+      );
 
     res.json({
       mensaje: 'Contraseña cambiada exitosamente',
       usuario: usuarioActualizado,
+      accessToken,
+      refreshToken,
       timestamp: new Date().toISOString()
     });
 
@@ -176,7 +179,10 @@ const cambiarContraseña = async (req, res) => {
 
     res.status(500).json({
       error: 'Error interno del servidor',
-      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+      detalles:
+        config.servidor.entorno === 'development'
+          ? error.message
+          : 'Error al procesar la solicitud'
     });
   }
 };

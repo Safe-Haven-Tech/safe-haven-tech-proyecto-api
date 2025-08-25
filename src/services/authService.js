@@ -197,44 +197,44 @@ class AuthService {
    * @param {string} userId - ID del usuario
    * @param {string} contraseñaActual - Contraseña actual
    * @param {string} nuevaContraseña - Nueva contraseña
-   * @returns {Object} Usuario actualizado
+   * @returns {Object} Usuario actualizado + tokens
    */
-  async cambiarContraseña(userId, contraseñaActual, nuevaContraseña) {
-    // Buscar usuario
-    const usuario = await Usuario.findById(userId);
-    if (!usuario) {
-      throw new Error('Usuario no encontrado');
+    async cambiarContraseña(userId, contraseñaActual, nuevaContraseña) {
+      // Buscar usuario
+      const usuario = await Usuario.findById(userId);
+      if (!usuario) {
+        throw new Error('Usuario no encontrado');
+      }
+
+      // Verificar contraseña actual
+      const contraseñaValida = await bcrypt.compare(contraseñaActual, usuario.contraseña);
+      if (!contraseñaValida) {
+        throw new Error('Contraseña actual incorrecta');
+      }
+
+      // Encriptar nueva contraseña
+      const saltRounds = config.seguridad.bcryptRounds;
+      const nuevaContraseñaEncriptada = await bcrypt.hash(nuevaContraseña, saltRounds);
+
+      // Actualizar contraseña
+      const usuarioActualizado = await Usuario.findByIdAndUpdate(
+        userId,
+        {
+          contraseña: nuevaContraseñaEncriptada,
+          contraseñaCambiadaEn: new Date()
+        },
+        { new: true }
+      ).select('-contraseña');
+
+      // Generar tokens nuevos
+      const accessToken = this.generarAccessToken(usuario);
+      const refreshToken = this.generarRefreshToken(usuario);
+
+      console.log(`✅ Contraseña cambiada para: ${usuario.correo}`);
+
+      return { usuarioActualizado, accessToken, refreshToken };
     }
-
-    // Verificar contraseña actual
-    const contraseñaValida = await bcrypt.compare(contraseñaActual, usuario.contraseña);
-    if (!contraseñaValida) {
-      throw new Error('Contraseña actual incorrecta');
-    }
-
-    // Encriptar nueva contraseña
-    const saltRounds = config.seguridad.bcryptRounds;
-    const nuevaContraseñaEncriptada = await bcrypt.hash(nuevaContraseña, saltRounds);
-
-    // Actualizar contraseña
-    const usuarioActualizado = await Usuario.findByIdAndUpdate(
-      userId,
-      {
-        contraseña: nuevaContraseñaEncriptada,
-        contraseñaCambiadaEn: new Date()
-      },
-      { new: true }
-    ).select('-contraseña');
-
-    //  Invalidar tokens después de cambiar contraseña
-    this.invalidarTokens(userId);
-
-    console.log(`✅ Contraseña cambiada para: ${usuario.correo}`);
-
-    return usuarioActualizado;
-  }
-
-  /**
+      /**
    * Obtener información del usuario desde el token
    * @param {string} token - Access token
    * @returns {Object} Información del usuario

@@ -218,9 +218,7 @@ const actualizarUsuario = async (req, res) => {
     res.status(500).json({ error: 'Error interno del servidor', detalles: error.message });
   }
 };
-
 module.exports = { actualizarUsuario };
-
 
 
 /**
