@@ -560,7 +560,6 @@ const verificarNickname = async (req, res) => {
   }
 };
 
-
 module.exports = {
   registrarUsuario,
   obtenerUsuarios,
