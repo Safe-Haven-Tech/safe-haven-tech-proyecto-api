@@ -116,6 +116,47 @@ const obtenerUsuarios = async (req, res) => {
 };
 
 /**
+ * @desc    Obtener información pública de un usuario
+ * @route   GET /api/usuarios/public/:id
+ * @access  Public
+ */
+const obtenerUsuarioPublico = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const usuario = await usuariosService.obtenerUsuarioPublico(id);
+    
+    res.json({
+      mensaje: 'Información pública del usuario obtenida exitosamente',
+      usuario,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error al obtener usuario público:', error);
+    
+    if (error.message === 'No existe un usuario con el ID proporcionado') {
+      return res.status(404).json({
+        error: 'Usuario no encontrado',
+        detalles: error.message
+      });
+    }
+
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        error: 'ID inválido',
+        detalles: 'El formato del ID proporcionado no es válido'
+      });
+    }
+
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+    });
+  }
+};
+
+/**
  * @desc    Obtener usuario por ID
  * @route   GET /api/usuarios/:id
  * @access  Private (usuario propio o administrador)
@@ -433,6 +474,7 @@ module.exports = {
   registrarUsuario,
   obtenerUsuarios,
   obtenerUsuarioPorId,
+  obtenerUsuarioPublico,
   actualizarUsuario,
   cambiarEstadoUsuario,
   desactivarUsuario,

@@ -163,6 +163,41 @@ class UsuariosService {
   }
 
   /**
+   * Obtener información pública de un usuario
+   * @param {string} id - ID del usuario
+   * @returns {Object} Información pública del usuario
+   */
+  async obtenerUsuarioPublico(id) {
+    const usuario = await Usuario.findById(id).select('nombreCompleto nombreUsuario fotoPerfil biografia pronombres genero visibilidadPerfil anonimo fechaRegistro');
+    
+    if (!usuario) {
+      throw new Error('No existe un usuario con el ID proporcionado');
+    }
+
+    // Si el usuario es anónimo, solo mostrar información básica
+    if (usuario.anonimo) {
+      return {
+        nombreCompleto: 'Usuario Anónimo',
+        nombreUsuario: usuario.nombreUsuario,
+        anonimo: true,
+        fechaRegistro: usuario.fechaRegistro
+      };
+    }
+
+    // Si el perfil no es público, solo mostrar información básica
+    if (usuario.visibilidadPerfil === 'privado') {
+      return {
+        nombreCompleto: usuario.nombreCompleto,
+        nombreUsuario: usuario.nombreUsuario,
+        visibilidadPerfil: 'privado',
+        fechaRegistro: usuario.fechaRegistro
+      };
+    }
+
+    return usuario;
+  }
+
+  /**
    * Actualizar usuario
    * @param {string} id - ID del usuario
    * @param {Object} datosActualizacion - Datos a actualizar

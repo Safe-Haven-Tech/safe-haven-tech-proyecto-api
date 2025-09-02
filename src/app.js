@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
 
 const { config } = require('./config');
 
@@ -46,7 +47,16 @@ app.use('/api/', limiter);
 
 const formatoLog = config.servidor.entorno === 'production' ? 'combined' : 'dev';
 app.use(morgan(formatoLog, {
-  skip: (req, res) => res.statusCode < 400
+  skip: (req, res) => {
+    // Filtrar rutas de frontend y archivos estáticos que no queremos ver
+    return req.path.startsWith('/_next/') || 
+           req.path.startsWith('/favicon.ico') || 
+           req.path.startsWith('/.well-known/') ||
+           req.path === '/' ||
+           req.path.includes('webpack-hmr') ||
+           req.path.includes('hot-reload') ||
+           req.path.includes('__webpack_hmr');
+  }
 }));
 
 app.use(express.json({ 
@@ -66,13 +76,44 @@ app.use(express.urlencoded({
   limit: '10mb' 
 }));
 
+// Filtrar rutas de webpack HMR antes de las rutas principales
+app.use((req, res, next) => {
+  // Bloquear completamente las rutas de webpack HMR
+  if (req.path.includes('webpack-hmr') || 
+      req.path.includes('__webpack_hmr') || 
+      req.path.includes('hot-reload') ||
+      req.path.includes('hmr') ||
+      req.path.includes('hot') ||
+      req.path.includes('reload')) {
+    return res.status(404).end(); // Respuesta silenciosa
+  }
+  next();
+});
+
 // Importar y usar rutas
 const routes = require('./routes');
 app.use('/api', routes);
 
+// Servir archivos estáticos (uploads)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 app.use((req, res, next) => {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${req.method} ${req.path} - ${req.ip}`);
+  // Filtrar logs de frontend, archivos estáticos y rutas no relevantes
+  const shouldSkip = req.path.startsWith('/_next/') || 
+                     req.path.startsWith('/favicon.ico') || 
+                     req.path.startsWith('/.well-known/') ||
+                     req.path === '/' ||
+                     req.path.includes('webpack-hmr') ||
+                     req.path.includes('hot-reload') ||
+                     req.path.includes('__webpack_hmr') ||
+                     req.path.includes('hmr') ||
+                     req.path.includes('hot') ||
+                     req.path.includes('reload');
+  
+  if (!shouldSkip) {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] ${req.method} ${req.path} - ${req.ip}`);
+  }
   next();
 });
 
