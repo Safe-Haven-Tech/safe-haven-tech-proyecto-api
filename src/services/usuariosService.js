@@ -406,7 +406,7 @@ class UsuariosService {
     }
   
     // Validar contraseña
-    const coinciden = await bcryp.compare(contraseña, usuario.contraseña);
+    const coinciden = await bcrypt.compare(contraseña, usuario.contraseña);
     if (!coinciden) {
       throw new Error('Contraseña incorrecta');
     }
@@ -425,6 +425,18 @@ class UsuariosService {
     console.log(`✅ Usuario eliminado: ${usuario.correo}`);
     return true;
   }  
+
+ async crearUsuarioAnonimo()  {
+  const randomId = Math.random().toString(36).substring(2, 10);
+  const anonimo = new Usuario({
+    nombreUsuario: `anon_${randomId}`,
+    anonimo: true,
+    activo: true,
+    estado: 'activo'
+  });
+  await anonimo.save();
+  return anonimo;
+};
 }
 
 module.exports = new UsuariosService();

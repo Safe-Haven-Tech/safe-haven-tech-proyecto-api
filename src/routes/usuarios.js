@@ -8,13 +8,13 @@ const {
   cambiarEstadoUsuario, 
   desactivarUsuario, 
   activarUsuario,
-  //obtenerUsuarioPublico
+  obtenerUsuarioPublico,
+  eliminarUsuario,
+  verificarNickname
 } = require('../controllers/usuariosController');
 
-// CORREGIR - usa middlewares en plural
+const upload = require('../utils/multer');
 const { validarRegistroUsuario, validarActualizacionUsuario, validarIdMongo } = require('../middlewares/validacion');
-
-// CORREGIR - también auth.js está en middlewares
 const { autenticarToken, verificarRol, verificarPropietario, verificarUsuarioActivo } = require('../middlewares/auth');
 
 /**
@@ -25,11 +25,18 @@ const { autenticarToken, verificarRol, verificarPropietario, verificarUsuarioAct
 router.post('/registro', validarRegistroUsuario, registrarUsuario);
 
 /**
- * @route   GET /api/usuarios/public/:id
- * @desc    Obtener información pública de un usuario
+ * @route   GET /api/usuarios/verificar-nickname/:nickname
+ * @desc    Verificar disponibilidad de nickname (AHORA PÚBLICO)
  * @access  Public
  */
-//router.get('/public/:id', validarIdMongo, obtenerUsuarioPublico);
+router.get('/verificar-nickname/:nickname', verificarNickname);
+
+/**
+ * @route   GET /api/usuarios/public/:nickname
+ * @desc    Obtener información pública de un usuario por nickname
+ * @access  Public
+ */
+router.get('/public/:nickname', obtenerUsuarioPublico);
 
 /**
  * @route   GET /api/usuarios
@@ -50,7 +57,7 @@ router.get('/:id', autenticarToken, verificarPropietario('id'), obtenerUsuarioPo
  * @desc    Actualizar usuario
  * @access  Private (usuario propio o administrador)
  */
-router.put('/:id', autenticarToken, verificarPropietario('id'), validarIdMongo, validarActualizacionUsuario, actualizarUsuario);
+router.put('/:id', autenticarToken, verificarPropietario('id'), validarIdMongo, upload.single('fotoPerfil'), validarActualizacionUsuario, actualizarUsuario);
 
 /**
  * @route   PATCH /api/usuarios/:id/estado
@@ -72,5 +79,12 @@ router.patch('/:id/desactivar', autenticarToken, verificarRol('administrador'), 
  * @access  Private (solo administradores)
  */
 router.patch('/:id/activar', autenticarToken, verificarRol('administrador'), validarIdMongo, activarUsuario);
+
+/**
+ * @route   DELETE /api/usuarios/:id
+ * @desc    Eliminar usuario
+ * @access  Private (usuario propio o administrador)
+ */
+router.delete('/:id', autenticarToken, verificarPropietario('id'), validarIdMongo, eliminarUsuario);
 
 module.exports = router;

@@ -38,7 +38,7 @@ const UsuarioSchema = new Schema({
   },
   nombreCompleto: {
     type: String,
-    required: [true, 'El nombre completo es obligatorio'],
+    required: [false],
     trim: true,
     minlength: [2, 'El nombre completo debe tener al menos 2 caracteres'],
     maxlength: [100, 'El nombre completo no puede exceder los 100 caracteres'],
@@ -85,7 +85,7 @@ const UsuarioSchema = new Schema({
     type: String,
     maxlength: [10, 'El género no puede exceder los 10 caracteres'],
     trim: true,
-    required: [true, 'El género es obligatorio']
+    required: [false]
   },
   pronombres: {
     type: String,

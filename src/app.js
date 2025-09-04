@@ -29,7 +29,7 @@ app.use(cors({
   origin: config.cors.origen,
   credentials: config.cors.credenciales,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: '*'
 }));
 
 const limiter = rateLimit({
