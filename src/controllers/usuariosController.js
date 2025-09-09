@@ -107,38 +107,98 @@ const obtenerUsuarios = async (req, res) => {
  * @route   GET /api/usuarios/public/:id
  * @access  Public
  */
+
 const obtenerUsuarioPublico = async (req, res) => {
   try {
-    const { id } = req.params;
-    
-    const usuario = await usuariosService.obtenerUsuarioPublico(id);
-    
+    const { nickname } = req.params;
+
+    // ✅ Usar búsqueda case-insensitive con regex
+    const usuario = await Usuario.findOne({ 
+      nombreUsuario: { $regex: new RegExp(`^${nickname}$`, 'i') } 
+    })
+      .select('nombreUsuario nombreCompleto fotoPerfil visibilidadPerfil biografia genero pronombres rol createdAt seguidores seguidos activo estado')
+      .where('activo').equals(true)
+      .where('estado').equals('activo');
+
+    if (!usuario) {
+      return res.status(404).json({
+        error: 'Usuario no encontrado',
+        detalles: 'No existe un usuario activo con ese nickname'
+      });
+    }
+
+    // Verificar si el usuario autenticado es el dueño
+    let esPropietario = false;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const jwt = require('jsonwebtoken');
+        const { config } = require('../config');
+        const decoded = jwt.verify(token, config.jwt.secret);
+        esPropietario = decoded.id === usuario._id.toString();
+      } catch (error) {
+        // Token inválido -> no propietario
+      }
+    }
+
+    let usuarioPublico;
+
+    if (usuario.visibilidadPerfil === 'privado' && !esPropietario) {
+      // PERFIL PRIVADO - Solo información básica
+      usuarioPublico = {
+        _id: usuario._id,
+        nombreUsuario: usuario.nombreUsuario,
+        nombreCompleto: usuario.nombreCompleto,
+        fotoPerfil: usuario.fotoPerfil,
+        visibilidadPerfil: usuario.visibilidadPerfil,
+        rol: usuario.rol,
+        pronombres: usuario.pronombres,
+        createdAt: usuario.createdAt,
+        biografia: '',
+        seguidores: [],
+        seguidos: [],
+        totalSeguidores: 0,
+        totalSeguidos: 0
+      };
+    } else {
+      // PERFIL PÚBLICO o PROPIO - Información completa
+      usuarioPublico = {
+        _id: usuario._id,
+        nombreUsuario: usuario.nombreUsuario,
+        nombreCompleto: usuario.nombreCompleto,
+        fotoPerfil: usuario.fotoPerfil,
+        biografia: usuario.biografia,
+        genero: usuario.genero,
+        pronombres: usuario.pronombres,
+        rol: usuario.rol,
+        visibilidadPerfil: usuario.visibilidadPerfil,
+        seguidores: usuario.seguidores || [],
+        seguidos: usuario.seguidos || [],
+        createdAt: usuario.createdAt,
+        totalSeguidores: usuario.seguidores ? usuario.seguidores.length : 0,
+        totalSeguidos: usuario.seguidos ? usuario.seguidos.length : 0
+      };
+    }
+
     res.json({
-      mensaje: 'Información pública del usuario obtenida exitosamente',
-      usuario,
+      usuario: usuarioPublico,
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('❌ Error al obtener usuario público:', error);
-    
-    if (error.message === 'No existe un usuario con el ID proporcionado') {
-      return res.status(404).json({
-        error: 'Usuario no encontrado',
-        detalles: error.message
-      });
-    }
+    console.error('❌ Error al obtener usuario público por nickname:', error);
 
     if (error.name === 'CastError') {
       return res.status(400).json({
-        error: 'ID inválido',
-        detalles: 'El formato del ID proporcionado no es válido'
+        error: 'Nickname inválido',
+        detalles: 'El formato del nickname proporcionado no es válido'
       });
     }
 
     res.status(500).json({
       error: 'Error interno del servidor',
-      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+      detalles: process.env.NODE_ENV === 'development' ? error.message : 'Error al procesar la solicitud'
     });
   }
 };
@@ -450,100 +510,7 @@ const eliminarUsuario = async (req, res) => {
   }
 };
 
-const obtenerUsuarioPublico = async (req, res) => {
-  try {
-    const { nickname } = req.params;
 
-    // ✅ Usar búsqueda case-insensitive con regex
-    const usuario = await Usuario.findOne({ 
-      nombreUsuario: { $regex: new RegExp(`^${nickname}$`, 'i') } 
-    })
-      .select('nombreUsuario nombreCompleto fotoPerfil visibilidadPerfil biografia genero pronombres rol createdAt seguidores seguidos activo estado')
-      .where('activo').equals(true)
-      .where('estado').equals('activo');
-
-    if (!usuario) {
-      return res.status(404).json({
-        error: 'Usuario no encontrado',
-        detalles: 'No existe un usuario activo con ese nickname'
-      });
-    }
-
-    // Verificar si el usuario autenticado es el dueño
-    let esPropietario = false;
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-      try {
-        const jwt = require('jsonwebtoken');
-        const { config } = require('../config');
-        const decoded = jwt.verify(token, config.jwt.secret);
-        esPropietario = decoded.id === usuario._id.toString();
-      } catch (error) {
-        // Token inválido -> no propietario
-      }
-    }
-
-    let usuarioPublico;
-
-    if (usuario.visibilidadPerfil === 'privado' && !esPropietario) {
-      // PERFIL PRIVADO - Solo información básica
-      usuarioPublico = {
-        _id: usuario._id,
-        nombreUsuario: usuario.nombreUsuario,
-        nombreCompleto: usuario.nombreCompleto,
-        fotoPerfil: usuario.fotoPerfil,
-        visibilidadPerfil: usuario.visibilidadPerfil,
-        rol: usuario.rol,
-        pronombres: usuario.pronombres,
-        createdAt: usuario.createdAt,
-        biografia: '',
-        seguidores: [],
-        seguidos: [],
-        totalSeguidores: 0,
-        totalSeguidos: 0
-      };
-    } else {
-      // PERFIL PÚBLICO o PROPIO - Información completa
-      usuarioPublico = {
-        _id: usuario._id,
-        nombreUsuario: usuario.nombreUsuario,
-        nombreCompleto: usuario.nombreCompleto,
-        fotoPerfil: usuario.fotoPerfil,
-        biografia: usuario.biografia,
-        genero: usuario.genero,
-        pronombres: usuario.pronombres,
-        rol: usuario.rol,
-        visibilidadPerfil: usuario.visibilidadPerfil,
-        seguidores: usuario.seguidores || [],
-        seguidos: usuario.seguidos || [],
-        createdAt: usuario.createdAt,
-        totalSeguidores: usuario.seguidores ? usuario.seguidores.length : 0,
-        totalSeguidos: usuario.seguidos ? usuario.seguidos.length : 0
-      };
-    }
-
-    res.json({
-      usuario: usuarioPublico,
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('❌ Error al obtener usuario público por nickname:', error);
-
-    if (error.name === 'CastError') {
-      return res.status(400).json({
-        error: 'Nickname inválido',
-        detalles: 'El formato del nickname proporcionado no es válido'
-      });
-    }
-
-    res.status(500).json({
-      error: 'Error interno del servidor',
-      detalles: process.env.NODE_ENV === 'development' ? error.message : 'Error al procesar la solicitud'
-    });
-  }
-};
 
 /**
  * @desc    Verificar disponibilidad de nickname

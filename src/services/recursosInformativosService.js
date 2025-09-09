@@ -80,20 +80,22 @@ class RecursosInformativosService {
   }
 
   // Obtener un recurso por ID
-  async obtenerRecursoPorId(id) {
-    try {
-      const recurso = await RecursoInformativo.findById(id)
-        .populate('añadidoPor', 'nombreCompleto rol');
-      
-      if (!recurso) {
-        throw new Error('Recurso no encontrado');
-      }
-
-      return recurso;
-    } catch (error) {
-      throw new Error(`Error al obtener el recurso: ${error.message}`);
+async obtenerRecursoPorId(id) {
+  try {
+    const recurso = await RecursoInformativo.findById(id)
+      .populate('añadidoPor', 'nombreCompleto rol')
+      .populate('calificacion.votos.usuario', '_id') 
+      .lean();
+    
+    if (!recurso) {
+      throw new Error('Recurso no encontrado');
     }
+
+    return recurso;
+  } catch (error) {
+    throw new Error(`Error al obtener el recurso: ${error.message}`);
   }
+}
 
   // Buscar recursos por texto
   async buscarRecursos(termino, opciones = {}) {
@@ -258,52 +260,62 @@ class RecursosInformativosService {
   }
 
   // Incrementar visitas
-  async incrementarVisitas(id) {
-    try {
-      const recurso = await RecursoInformativo.findById(id);
-      
-      if (!recurso) {
-        throw new Error('Recurso no encontrado');
-      }
-
-      await recurso.incrementarVisitas();
-      return recurso;
-    } catch (error) {
-      throw new Error(`Error al incrementar visitas: ${error.message}`);
+async incrementarVisitas(id) {
+  try {
+    
+    const recurso = await RecursoInformativo.findByIdAndUpdate(
+      id,
+      { $inc: { visitas: 1 } },
+      { new: true }
+    );
+    
+    if (!recurso) {
+      throw new Error('Recurso no encontrado');
     }
-  }
 
+    return recurso;
+  } catch (error) {
+    throw new Error(`Error al incrementar visitas: ${error.message}`);
+  }
+}
   // Incrementar descargas
-  async incrementarDescargas(id) {
-    try {
-      const recurso = await RecursoInformativo.findById(id);
-      
-      if (!recurso) {
-        throw new Error('Recurso no encontrado');
-      }
-
-      await recurso.incrementarDescargas();
-      return recurso;
-    } catch (error) {
-      throw new Error(`Error al incrementar descargas: ${error.message}`);
+async incrementarDescargas(id) {
+  try {
+    const recurso = await RecursoInformativo.findByIdAndUpdate(
+      id,
+      { $inc: { descargas: 1 } },
+      { new: true }
+    );
+    
+    if (!recurso) {
+      throw new Error('Recurso no encontrado');
     }
+
+    return recurso;
+  } catch (error) {
+    throw new Error(`Error al incrementar descargas: ${error.message}`);
   }
+}
 
   // Incrementar compartidos
-  async incrementarCompartidos(id) {
-    try {
-      const recurso = await RecursoInformativo.findById(id);
-      
-      if (!recurso) {
-        throw new Error('Recurso no encontrado');
-      }
-
-      await recurso.incrementarCompartidos();
-      return recurso;
-    } catch (error) {
-      throw new Error(`Error al incrementar compartidos: ${error.message}`);
+async incrementarCompartidos(id) {
+  try {
+    const recurso = await RecursoInformativo.findByIdAndUpdate(
+      id,
+      { $inc: { compartidos: 1 } },
+      { new: true }
+    );
+    
+    if (!recurso) {
+      throw new Error('Recurso no encontrado');
     }
+
+    return recurso;
+  } catch (error) {
+    throw new Error(`Error al incrementar compartidos: ${error.message}`);
   }
+}
+
 
   // Obtener estadísticas generales
   async obtenerEstadisticas() {

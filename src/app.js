@@ -62,11 +62,18 @@ app.use(morgan(formatoLog, {
 app.use(express.json({ 
   limit: '10mb',
   verify: (req, res, buf) => {
+   
+    if (buf.length === 0) {
+      return;
+    }
+    
     try {
       JSON.parse(buf);
     } catch (e) {
-      res.status(400).json({ error: 'JSON inválido' });
-      throw new Error('JSON inválido');
+      const error = new Error('JSON inválido');
+      error.statusCode = 400;
+      error.expose = true;
+      throw error;
     }
   }
 }));
