@@ -64,6 +64,14 @@ const autenticarToken = async (req, res, next) => {
 const verificarRol = (roles) => {
   return (req, res, next) => {
     try {
+      // Verificar que el usuario esté autenticado
+      if (!req.usuario || !req.usuario.rol) {
+        return res.status(401).json({
+          error: 'Token requerido',
+          detalles: 'Se requiere un token de autenticación válido'
+        });
+      }
+
       const { rol } = req.usuario;
       
       // Convertir a array si es string
@@ -72,7 +80,7 @@ const verificarRol = (roles) => {
       if (!rolesPermitidos.includes(rol)) {
         return res.status(403).json({
           error: 'Acceso denegado',
-          detalles: `Se requiere uno de los siguientes roles: ${rolesPermitidos.join(', ')}`
+          detalles: `Se requiere uno de los siguientes roles: ${rolesPermitidos.join(', ')}. Tu rol actual es: ${rol}`
         });
       }
 

@@ -185,9 +185,236 @@ const validarIdMongo = (req, res, next) => {
   }
 };
 
+/**
+ * Middleware para validar creación/actualización de publicación
+ */
+const validarPublicacion = (req, res, next) => {
+  try {
+    const { contenido, tipo, anonimo, multimedia, etiquetasUsuarios, archivosAdjuntos } = req.body;
+    const errores = [];
+
+    // Validar contenido
+    if (!contenido || contenido.trim().length === 0) {
+      errores.push('El contenido de la publicación es obligatorio');
+    } else if (contenido.length > 5000) {
+      errores.push('El contenido no puede exceder los 5000 caracteres');
+    }
+
+    // Validar tipo
+    if (!tipo) {
+      errores.push('El tipo de publicación es obligatorio');
+    } else if (!['foro', 'perfil'].includes(tipo)) {
+      errores.push('El tipo debe ser "foro" o "perfil"');
+    }
+
+    // Validar anonimo
+    if (anonimo !== undefined && typeof anonimo !== 'boolean') {
+      errores.push('El campo anonimo debe ser true o false');
+    }
+
+    // Validar multimedia (solo para publicaciones de perfil)
+    if (multimedia !== undefined) {
+      if (!Array.isArray(multimedia)) {
+        errores.push('El campo multimedia debe ser un array');
+      } else if (multimedia.length > 10) {
+        errores.push('No se pueden subir más de 10 archivos multimedia');
+      } else {
+        multimedia.forEach((url, index) => {
+          if (typeof url !== 'string' || url.trim().length === 0) {
+            errores.push(`El archivo multimedia en la posición ${index + 1} no es válido`);
+          } else if (url.length > 1024) {
+            errores.push(`La URL del archivo multimedia en la posición ${index + 1} es demasiado larga`);
+          }
+        });
+      }
+    }
+
+    // Validar etiquetas de usuarios (solo para publicaciones de perfil)
+    if (etiquetasUsuarios !== undefined) {
+      if (!Array.isArray(etiquetasUsuarios)) {
+        errores.push('El campo etiquetasUsuarios debe ser un array');
+      } else if (etiquetasUsuarios.length > 10) {
+        errores.push('No se pueden etiquetar más de 10 usuarios');
+      } else {
+        etiquetasUsuarios.forEach((id, index) => {
+          if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+            errores.push(`El ID del usuario etiquetado en la posición ${index + 1} no es válido`);
+          }
+        });
+      }
+    }
+
+    // Validar archivos adjuntos (solo para publicaciones de foro)
+    if (archivosAdjuntos !== undefined) {
+      if (!Array.isArray(archivosAdjuntos)) {
+        errores.push('El campo archivosAdjuntos debe ser un array');
+      } else if (archivosAdjuntos.length > 5) {
+        errores.push('No se pueden adjuntar más de 5 archivos');
+      } else {
+        archivosAdjuntos.forEach((url, index) => {
+          if (typeof url !== 'string' || url.trim().length === 0) {
+            errores.push(`El archivo adjunto en la posición ${index + 1} no es válido`);
+          } else if (url.length > 1024) {
+            errores.push(`La URL del archivo adjunto en la posición ${index + 1} es demasiado larga`);
+          }
+        });
+      }
+    }
+
+    if (errores.length > 0) {
+      return res.status(400).json({
+        error: 'Datos de publicación inválidos',
+        detalles: errores,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error('Error en validación de publicación:', error);
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: 'Error al validar los datos de la publicación'
+    });
+  }
+};
+
+/**
+ * Middleware para validar comentario
+ */
+const validarComentario = (req, res, next) => {
+  try {
+    const { contenido } = req.body;
+    const errores = [];
+
+    if (!contenido || contenido.trim().length === 0) {
+      errores.push('El contenido del comentario es obligatorio');
+    } else if (contenido.length > 1000) {
+      errores.push('El contenido del comentario no puede exceder los 1000 caracteres');
+    }
+
+    if (errores.length > 0) {
+      return res.status(400).json({
+        error: 'Datos de comentario inválidos',
+        detalles: errores,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error('Error en validación de comentario:', error);
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: 'Error al validar los datos del comentario'
+    });
+  }
+};
+
+/**
+ * Middleware para validar actualización de publicación (solo campos editables)
+ */
+const validarActualizacionPublicacion = (req, res, next) => {
+  try {
+    const { contenido, etiquetasUsuarios } = req.body;
+    const errores = [];
+
+    // Validar contenido
+    if (!contenido || contenido.trim().length === 0) {
+      errores.push('El contenido de la publicación es obligatorio');
+    } else if (contenido.length > 5000) {
+      errores.push('El contenido no puede exceder los 5000 caracteres');
+    }
+
+    // Validar etiquetas de usuarios (solo para publicaciones de perfil)
+    if (etiquetasUsuarios !== undefined) {
+      if (!Array.isArray(etiquetasUsuarios)) {
+        errores.push('El campo etiquetasUsuarios debe ser un array');
+      } else if (etiquetasUsuarios.length > 10) {
+        errores.push('No se pueden etiquetar más de 10 usuarios');
+      } else {
+        etiquetasUsuarios.forEach((id, index) => {
+          if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+            errores.push(`El ID del usuario etiquetado en la posición ${index + 1} no es válido`);
+          }
+        });
+      }
+    }
+
+    if (errores.length > 0) {
+      return res.status(400).json({
+        error: 'Datos de publicación inválidos',
+        detalles: errores,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error('Error en validación de actualización de publicación:', error);
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: 'Error al validar los datos de la publicación'
+    });
+  }
+};
+
+/**
+ * Middleware para validar denuncia
+ */
+const validarDenuncia = (req, res, next) => {
+  try {
+    const { motivo, descripcion } = req.body;
+    const errores = [];
+
+    if (!motivo) {
+      errores.push('El motivo de la denuncia es obligatorio');
+    } else {
+      const motivosValidos = [
+        'contenido_inapropiado',
+        'spam',
+        'acoso',
+        'discurso_odio',
+        'informacion_falsa',
+        'contenido_sexual',
+        'violencia',
+        'otro'
+      ];
+      
+      if (!motivosValidos.includes(motivo)) {
+        errores.push('El motivo de la denuncia no es válido');
+      }
+    }
+
+    if (descripcion && descripcion.length > 500) {
+      errores.push('La descripción no puede exceder los 500 caracteres');
+    }
+
+    if (errores.length > 0) {
+      return res.status(400).json({
+        error: 'Datos de denuncia inválidos',
+        detalles: errores,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error('Error en validación de denuncia:', error);
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: 'Error al validar los datos de la denuncia'
+    });
+  }
+};
+
 module.exports = {
   validarRegistroUsuario,
   validarActualizacionUsuario,
   validarIdMongo,
-  validarImagenUsuario
+  validarImagenUsuario,
+  validarPublicacion,
+  validarActualizacionPublicacion,
+  validarComentario,
+  validarDenuncia
 };
