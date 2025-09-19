@@ -2,6 +2,8 @@ const Publicacion = require('../models/Publicacion');
 const Comentario = require('../models/Comentario');
 const Denuncia = require('../models/Denuncia');
 const Usuario = require('../models/Usuario');
+const Reaccion = require('../models/Reaccion');
+const Notificacion = require('../models/Notificacion');
 const { eliminarMultiplesArchivos } = require('../utils/cloudinaryPublicaciones');
 
 /**
@@ -364,6 +366,85 @@ const darLike = async (id, usuarioId) => {
 };
 
 /**
+ * Reaccionar a una publicación
+ */
+const reaccionarAPublicacion = async (id, usuarioId, tipoReaccion) => {
+  const publicacion = await Publicacion.findById(id);
+  if (!publicacion) {
+    throw new Error('No existe una publicación con el ID proporcionado');
+  }
+
+  // Verificar que el usuario puede ver la publicación
+  if (!publicacion.puedeVer(usuarioId)) {
+    throw new Error('No tienes permisos para ver esta publicación');
+  }
+
+  // Buscar reacción existente
+  let reaccion = await Reaccion.findOne({
+    publicacionId: id,
+    usuarioId
+  });
+
+  if (reaccion) {
+    // Si ya existe, actualizar el tipo
+    reaccion.tipo = tipoReaccion;
+    await reaccion.save();
+  } else {
+    // Crear nueva reacción
+    reaccion = await Reaccion.create({
+      publicacionId: id,
+      usuarioId,
+      tipo: tipoReaccion
+    });
+
+    // Actualizar contador de likes en la publicación
+    await Publicacion.findByIdAndUpdate(id, {
+      $inc: { likes: 1 }
+    });
+  }
+
+  // Crear notificación para el autor de la publicación
+  if (publicacion.autorId.toString() !== usuarioId.toString()) {
+    const usuario = await Usuario.findById(usuarioId);
+    await Notificacion.crearNotificacion(
+      publicacion.autorId,
+      usuarioId,
+      'reaccion',
+      `${usuario.nombreCompleto} reaccionó a tu publicación`,
+      `/publicacion/${id}`
+    );
+  }
+
+  return {
+    mensaje: 'Reacción agregada exitosamente',
+    reaccion
+  };
+};
+
+/**
+ * Quitar reacción de una publicación
+ */
+const quitarReaccionDePublicacion = async (id, usuarioId) => {
+  const reaccion = await Reaccion.findOneAndDelete({
+    publicacionId: id,
+    usuarioId
+  });
+
+  if (!reaccion) {
+    throw new Error('No tienes una reacción en esta publicación');
+  }
+
+  // Actualizar contador de likes en la publicación
+  await Publicacion.findByIdAndUpdate(id, {
+    $inc: { likes: -1 }
+  });
+
+  return {
+    mensaje: 'Reacción eliminada exitosamente'
+  };
+};
+
+/**
  * Quitar like de una publicación
  */
 const quitarLike = async (id, usuarioId) => {
@@ -506,6 +587,8 @@ module.exports = {
   eliminarPublicacion,
   darLike,
   quitarLike,
+  reaccionarAPublicacion,
+  quitarReaccionDePublicacion,
   moderarPublicacion,
   crearDenuncia,
   obtenerDenuncias,

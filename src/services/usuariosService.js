@@ -165,10 +165,11 @@ class UsuariosService {
   /**
    * Obtener información pública de un usuario
    * @param {string} id - ID del usuario
+   * @param {string} usuarioActualId - ID del usuario que está consultando
    * @returns {Object} Información pública del usuario
    */
-  async obtenerUsuarioPublico(id) {
-    const usuario = await Usuario.findById(id).select('nombreCompleto nombreUsuario fotoPerfil biografia pronombres genero visibilidadPerfil anonimo fechaRegistro');
+  async obtenerUsuarioPublico(id, usuarioActualId = null) {
+    const usuario = await Usuario.findById(id).select('nombreCompleto nombreUsuario fotoPerfil biografia pronombres genero visibilidadPerfil anonimo fechaRegistro seguidores');
     
     if (!usuario) {
       throw new Error('No existe un usuario con el ID proporcionado');
@@ -184,14 +185,36 @@ class UsuariosService {
       };
     }
 
-    // Si el perfil no es público, solo mostrar información básica
+    // Si el perfil es privado, verificar si el usuario actual es seguidor
     if (usuario.visibilidadPerfil === 'privado') {
-      return {
-        nombreCompleto: usuario.nombreCompleto,
-        nombreUsuario: usuario.nombreUsuario,
-        visibilidadPerfil: 'privado',
-        fechaRegistro: usuario.fechaRegistro
-      };
+      // Si no hay usuario autenticado, solo mostrar información básica
+      if (!usuarioActualId) {
+        return {
+          nombreCompleto: usuario.nombreCompleto,
+          nombreUsuario: usuario.nombreUsuario,
+          visibilidadPerfil: 'privado',
+          fechaRegistro: usuario.fechaRegistro
+        };
+      }
+
+      // Si el usuario actual es el mismo usuario, mostrar toda la información
+      if (usuario._id.toString() === usuarioActualId.toString()) {
+        return usuario;
+      }
+
+      // Verificar si el usuario actual es seguidor
+      const esSeguidor = usuario.seguidores.some(seguidor => 
+        seguidor.toString() === usuarioActualId.toString()
+      );
+
+      if (!esSeguidor) {
+        return {
+          nombreCompleto: usuario.nombreCompleto,
+          nombreUsuario: usuario.nombreUsuario,
+          visibilidadPerfil: 'privado',
+          fechaRegistro: usuario.fechaRegistro
+        };
+      }
     }
 
     return usuario;
