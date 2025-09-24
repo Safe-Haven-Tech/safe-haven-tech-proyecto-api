@@ -318,42 +318,83 @@ async incrementarCompartidos(id) {
 
 
   // Obtener estadísticas generales
-  async obtenerEstadisticas() {
+ async obtenerEstadisticas() {
     try {
-      const totalRecursos = await RecursoInformativo.countDocuments();
-      const recursosDestacados = await RecursoInformativo.countDocuments({ destacado: true });
+
+      // Obtener todos los recursos para cálculos
+      const todosLosRecursos = await RecursoInformativo.find({});
       
-      // Calcular promedio de calificaciones
-      const recursosConCalificacion = await RecursoInformativo.find({
-        'calificacion.totalVotos': { $gt: 0 }
+      const totalRecursos = todosLosRecursos.length;
+      const recursosDestacados = todosLosRecursos.filter(r => r.destacado).length;
+      
+      // Calcular estadísticas por tipo
+      const porTipo = {};
+      todosLosRecursos.forEach(recurso => {
+        const tipo = recurso.tipo || 'sin_tipo';
+        porTipo[tipo] = (porTipo[tipo] || 0) + 1;
       });
-      
+
+      // Obtener los más visitados (top 5)
+      const masVisitados = await RecursoInformativo
+        .find({})
+        .sort({ visitas: -1 })
+        .limit(5)
+        .select('titulo visitas tipo fechaCreacion')
+        .populate('añadidoPor', 'nombreCompleto')
+        .lean();
+
+      // Calcular totales de interacciones
+      const totalVisitas = todosLosRecursos.reduce((sum, r) => sum + (r.visitas || 0), 0);
+      const totalDescargas = todosLosRecursos.reduce((sum, r) => sum + (r.descargas || 0), 0);
+      const totalCompartidos = todosLosRecursos.reduce((sum, r) => sum + (r.compartidos || 0), 0);
+
+      // Calcular promedio de calificaciones
+      const recursosConCalificacion = todosLosRecursos.filter(r => r.calificacion && r.calificacion.totalVotos > 0);
       const promedioGeneral = recursosConCalificacion.length > 0
         ? recursosConCalificacion.reduce((sum, r) => sum + r.calificacion.promedio, 0) / recursosConCalificacion.length
         : 0;
 
-      // Contar por tipo
-      const tipos = await RecursoInformativo.aggregate([
-        { $group: { _id: '$tipo', count: { $sum: 1 } } },
-        { $sort: { count: -1 } }
-      ]);
+      // Calcular distribución por tópicos (top 10)
+      const topicosCounts = {};
+      todosLosRecursos.forEach(recurso => {
+        if (recurso.topicos && Array.isArray(recurso.topicos)) {
+          recurso.topicos.forEach(topico => {
+            topicosCounts[topico] = (topicosCounts[topico] || 0) + 1;
+          });
+        }
+      });
 
-      // Contar por tópicos
-      const topicos = await RecursoInformativo.aggregate([
-        { $unwind: '$topicos' },
-        { $group: { _id: '$topicos', count: { $sum: 1 } } },
-        { $sort: { count: -1 } }
-      ]);
+      const distribucionPorTopicos = Object.entries(topicosCounts)
+        .map(([topico, count]) => ({ _id: topico, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
 
-      return {
-        totalRecursos,
-        recursosDestacados,
-        promedioCalificacion: Math.round(promedioGeneral * 10) / 10,
-        recursosConCalificacion: recursosConCalificacion.length,
-        distribucionPorTipo: tipos,
-        distribucionPorTopicos: topicos
+      const estadisticas = {
+        total: totalRecursos,
+        porTipo,
+        masVisitados,
+        resumen: {
+          totalVisitas,
+          totalDescargas,
+          totalCompartidos,
+          destacados: recursosDestacados,
+          promedioCalificacion: Math.round(promedioGeneral * 10) / 10,
+          recursosConCalificacion: recursosConCalificacion.length,
+          promedioVisitasPorRecurso: totalRecursos > 0 ? Math.round(totalVisitas / totalRecursos) : 0
+        },
+        distribucionPorTipo: Object.entries(porTipo).map(([tipo, count]) => ({ _id: tipo, count })),
+        distribucionPorTopicos
       };
+
+      console.log('✅ Estadísticas calculadas:', {
+        total: estadisticas.total,
+        porTipo: estadisticas.porTipo,
+        destacados: estadisticas.resumen.destacados
+      });
+
+      return estadisticas;
     } catch (error) {
+      console.error('❌ Error al obtener estadísticas:', error);
       throw new Error(`Error al obtener estadísticas: ${error.message}`);
     }
   }

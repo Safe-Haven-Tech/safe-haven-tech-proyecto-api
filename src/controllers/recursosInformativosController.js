@@ -391,18 +391,21 @@ const incrementarCompartidos = async (req, res) => {
 // Obtener estadísticas
 const obtenerEstadisticas = async (req, res) => {
   try {
-    const estadisticas =
-      await recursosInformativosService.obtenerEstadisticas();
-
-    res.json({
-      success: true,
-      data: estadisticas,
+    console.log('📊 Solicitando estadísticas de recursos informativos...');
+    
+    const estadisticas = await recursosInformativosService.obtenerEstadisticas();
+    
+    res.status(200).json({
+      exito: true,
+      mensaje: 'Estadísticas obtenidas exitosamente',
+      data: estadisticas
     });
   } catch (error) {
+    console.error('❌ Error al obtener estadísticas:', error);
     res.status(500).json({
-      success: false,
-      message: "Error al obtener estadísticas",
-      error: error.message,
+      exito: false,
+      mensaje: error.message || 'Error interno del servidor',
+      data: null
     });
   }
 };
@@ -966,6 +969,8 @@ const eliminarArchivo = async (req, res) => {
   }
 };
 
+
+
 module.exports = {
   obtenerRecursos,
   obtenerRecursoPorId,
@@ -980,11 +985,11 @@ module.exports = {
   incrementarVisitas,
   incrementarDescargas,
   incrementarCompartidos,
-  obtenerEstadisticas,
   obtenerTopicosDisponibles,
   obtenerTiposDisponibles,
   subirImagenPrincipal,
   subirImagenesGaleria,
   subirDocumentosAdjuntos,
   eliminarArchivo,
+  obtenerEstadisticas,
 };
