@@ -6,6 +6,8 @@ const usuariosRoutes = require('./usuarios');
 const authRoutes = require('./auth');
 const encuestasRoutes = require('./encuestas');
 const recursosInformativosRoutes = require('./recursosInformativos');
+const publicacionesRoutes = require('./publicaciones');
+const moderacionRoutes = require('./moderacion');
 
 // Importar controladores del sistema
 const { obtenerHealthCheck, obtenerInformacionSistema, obtenerEstadisticasSistema } = require('../controllers/sistemaController');
@@ -15,6 +17,8 @@ router.use('/usuarios', usuariosRoutes);
 router.use('/auth', authRoutes);
 router.use('/encuestas', encuestasRoutes);
 router.use('/recursos-informativos', recursosInformativosRoutes);
+router.use('/publicaciones', publicacionesRoutes);
+router.use('/moderacion', moderacionRoutes);
 
 // Ruta de prueba/health check
 router.get('/health', obtenerHealthCheck);
