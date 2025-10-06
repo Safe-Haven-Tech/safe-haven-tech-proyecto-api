@@ -46,26 +46,64 @@ const seguirUsuario = async (usuarioId, usuarioASeguirId) => {
       throw new Error('Ya estás siguiendo a este usuario');
     }
 
-    // Agregar a seguidos y seguidores
-    usuario.seguidos.push(usuarioASeguirId);
-    usuarioASeguir.seguidores.push(usuarioId);
+    // Verificar si el usuario a seguir tiene perfil privado
+    if (usuarioASeguir.visibilidadPerfil === 'privado') {
+      // Verificar si ya hay una solicitud pendiente
+      const solicitudExistente = usuarioASeguir.solicitudesSeguidores.find(
+        solicitud => solicitud.usuarioId.toString() === usuarioId.toString() && solicitud.estado === 'pendiente'
+      );
 
-    await Promise.all([usuario.save(), usuarioASeguir.save()]);
+      if (solicitudExistente) {
+        throw new Error('Ya tienes una solicitud de seguimiento pendiente con este usuario');
+      }
 
-    // Crear notificación
-    await Notificacion.crearNotificacion(
-      usuarioASeguirId,
-      usuarioId,
-      'nuevo_seguidor',
-      `${usuario.nombreCompleto} comenzó a seguirte`,
-      `/perfil/${usuarioId}`
-    );
+      // Crear solicitud de seguimiento
+      const nuevaSolicitud = {
+        usuarioId: usuarioId,
+        fechaSolicitud: new Date(),
+        estado: 'pendiente'
+      };
+      
+      usuarioASeguir.solicitudesSeguidores.push(nuevaSolicitud);
 
-    return {
-      mensaje: 'Usuario seguido exitosamente',
-      seguidores: usuarioASeguir.seguidores.length,
-      seguidos: usuario.seguidos.length
-    };
+      await usuarioASeguir.save();
+
+      // Crear notificación de solicitud
+      await Notificacion.crearNotificacion(
+        usuarioASeguirId,
+        usuarioId,
+        'solicitud_seguimiento',
+        `${usuario.nombreCompleto} quiere seguirte`,
+        `/perfil/${usuarioId}`
+      );
+
+      return {
+        mensaje: 'Solicitud de seguimiento enviada. El usuario debe aceptarla.',
+        tipo: 'solicitud_enviada'
+      };
+    } else {
+      // Perfil público - seguir directamente
+      usuario.seguidos.push(usuarioASeguirId);
+      usuarioASeguir.seguidores.push(usuarioId);
+
+      await Promise.all([usuario.save(), usuarioASeguir.save()]);
+
+      // Crear notificación
+      await Notificacion.crearNotificacion(
+        usuarioASeguirId,
+        usuarioId,
+        'nuevo_seguidor',
+        `${usuario.nombreCompleto} comenzó a seguirte`,
+        `/perfil/${usuarioId}`
+      );
+
+      return {
+        mensaje: 'Usuario seguido exitosamente',
+        seguidores: usuarioASeguir.seguidores.length,
+        seguidos: usuario.seguidos.length,
+        tipo: 'seguido_directamente'
+      };
+    }
 
   } catch (error) {
     throw error;
@@ -373,9 +411,9 @@ const marcarTodasLasNotificacionesComoLeidas = async (usuarioId) => {
 // ==================== REACCIONES ====================
 
 /**
- * Reaccionar a una publicación
+ * Reaccionar a una publicación (solo like)
  */
-const reaccionarAPublicacion = async (publicacionId, usuarioId, tipoReaccion) => {
+const reaccionarAPublicacion = async (publicacionId, usuarioId) => {
   try {
     const publicacion = await Publicacion.findById(publicacionId);
     if (!publicacion) {
@@ -394,22 +432,24 @@ const reaccionarAPublicacion = async (publicacionId, usuarioId, tipoReaccion) =>
     });
 
     if (reaccion) {
-      // Si ya existe, actualizar el tipo
-      reaccion.tipo = tipoReaccion;
-      await reaccion.save();
-    } else {
-      // Crear nueva reacción
-      reaccion = await Reaccion.create({
-        publicacionId,
-        usuarioId,
-        tipo: tipoReaccion
-      });
-
-      // Actualizar contador de likes en la publicación
-      await Publicacion.findByIdAndUpdate(publicacionId, {
-        $inc: { likes: 1 }
-      });
+      // Si ya existe, no hacer nada (ya tiene like)
+      return {
+        mensaje: 'Ya tienes un like en esta publicación',
+        reaccion
+      };
     }
+
+    // Crear nueva reacción (solo like)
+    reaccion = await Reaccion.create({
+      publicacionId,
+      usuarioId,
+      tipo: 'like'
+    });
+
+    // Actualizar contador de likes en la publicación
+    await Publicacion.findByIdAndUpdate(publicacionId, {
+      $inc: { likes: 1 }
+    });
 
     // Crear notificación para el autor de la publicación
     if (publicacion.autorId.toString() !== usuarioId.toString()) {
@@ -418,13 +458,13 @@ const reaccionarAPublicacion = async (publicacionId, usuarioId, tipoReaccion) =>
         publicacion.autorId,
         usuarioId,
         'reaccion',
-        `${usuario.nombreCompleto} reaccionó a tu publicación`,
+        `${usuario.nombreCompleto} le dio like a tu publicación`,
         `/publicacion/${publicacionId}`
       );
     }
 
     return {
-      mensaje: 'Reacción agregada exitosamente',
+      mensaje: 'Like agregado exitosamente',
       reaccion
     };
 
@@ -515,36 +555,43 @@ const obtenerFeed = async (usuarioId, pagina = 1, limite = 20) => {
 /**
  * Buscar usuarios
  */
-const buscarUsuarios = async (termino, pagina = 1, limite = 20) => {
+const buscarUsuarios = async (termino, pagina = 1, limite = 20, usuarioActualId = null) => {
   try {
     const regex = new RegExp(termino, 'i');
     
-    const usuarios = await Usuario.find({
+    // Construir filtros de búsqueda
+    const filtros = {
       $or: [
         { nombreCompleto: regex },
         { nombreUsuario: regex }
       ],
       activo: true,
       anonimo: false
-    })
-      .select('nombreCompleto fotoPerfil nombreUsuario visibilidadPerfil')
+    };
+    
+    // Excluir al usuario actual si se proporciona su ID
+    if (usuarioActualId) {
+      filtros._id = { $ne: usuarioActualId };
+    }
+    
+    const usuarios = await Usuario.find(filtros)
+      .select('nombreCompleto fotoPerfil nombreUsuario visibilidadPerfil anonimo seguidores')
       .sort({ nombreCompleto: 1 })
       .skip((pagina - 1) * limite)
       .limit(limite);
 
-    const total = await Usuario.countDocuments({
-      $or: [
-        { nombreCompleto: regex },
-        { nombreUsuario: regex }
-      ],
-      activo: true,
-      anonimo: false
-    });
+    // Aplicar restricciones de visualización usando la función auxiliar
+    const usuariosService = require('./usuariosService');
+    const usuariosFiltrados = usuarios.map(usuario => 
+      usuariosService.aplicarRestriccionesVisualizacion(usuario, usuarioActualId, false)
+    );
+
+    const total = await Usuario.countDocuments(filtros);
 
     const totalPaginas = Math.ceil(total / limite);
 
     return {
-      usuarios,
+      usuarios: usuariosFiltrados,
       paginacion: {
         paginaActual: pagina,
         totalPaginas,
@@ -598,12 +645,161 @@ const buscarPublicaciones = async (termino, pagina = 1, limite = 20) => {
   }
 };
 
+// ==================== SOLICITUDES DE SEGUIMIENTO ====================
+
+/**
+ * Obtener solicitudes de seguimiento pendientes
+ */
+const obtenerSolicitudesSeguidores = async (usuarioId, pagina = 1, limite = 20) => {
+  try {
+    const usuario = await Usuario.findById(usuarioId);
+
+    if (!usuario) {
+      throw new Error('Usuario no encontrado');
+    }
+
+    // Filtrar solo las solicitudes pendientes
+    const solicitudesPendientes = usuario.solicitudesSeguidores.filter(
+      solicitud => solicitud.estado === 'pendiente'
+    );
+
+    // Aplicar paginación
+    const inicio = (pagina - 1) * limite;
+    const fin = inicio + limite;
+    const solicitudesPagina = solicitudesPendientes.slice(inicio, fin);
+
+    // Populate los usuarios de las solicitudes paginadas
+    const solicitudesConUsuarios = await Promise.all(
+      solicitudesPagina.map(async (solicitud) => {
+        const usuarioSolicitante = await Usuario.findById(solicitud.usuarioId)
+          .select('nombreCompleto fotoPerfil nombreUsuario');
+        
+        return {
+          _id: solicitud._id,
+          solicitante: usuarioSolicitante,
+          fechaSolicitud: solicitud.fechaSolicitud,
+          estado: solicitud.estado
+        };
+      })
+    );
+
+    const total = solicitudesPendientes.length;
+    const totalPaginas = Math.ceil(total / limite);
+
+    return {
+      solicitudes: solicitudesConUsuarios,
+      paginacion: {
+        paginaActual: pagina,
+        totalPaginas,
+        totalElementos: total,
+        elementosPorPagina: limite
+      }
+    };
+
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Aceptar solicitud de seguimiento
+ */
+const aceptarSolicitudSeguimiento = async (usuarioId, solicitanteId) => {
+  try {
+    const usuario = await Usuario.findById(usuarioId);
+    const solicitante = await Usuario.findById(solicitanteId);
+
+    if (!usuario || !solicitante) {
+      throw new Error('Usuario no encontrado');
+    }
+
+    // Buscar la solicitud pendiente
+    const solicitud = usuario.solicitudesSeguidores.find(
+      s => s.usuarioId.toString() === solicitanteId.toString() && s.estado === 'pendiente'
+    );
+
+    if (!solicitud) {
+      throw new Error('No se encontró una solicitud pendiente de este usuario');
+    }
+
+    // Marcar solicitud como aceptada
+    solicitud.estado = 'aceptada';
+
+    // Agregar a seguidos y seguidores
+    if (!solicitante.seguidos.includes(usuarioId)) {
+      solicitante.seguidos.push(usuarioId);
+    }
+    if (!usuario.seguidores.includes(solicitanteId)) {
+      usuario.seguidores.push(solicitanteId);
+    }
+
+    await Promise.all([usuario.save(), solicitante.save()]);
+
+    // Crear notificación de aceptación
+    await Notificacion.crearNotificacion(
+      solicitanteId,
+      usuarioId,
+      'solicitud_aceptada',
+      `${usuario.nombreCompleto} aceptó tu solicitud de seguimiento`,
+      `/perfil/${usuarioId}`
+    );
+
+    return {
+      mensaje: 'Solicitud de seguimiento aceptada',
+      seguidores: usuario.seguidores.length,
+      seguidos: solicitante.seguidos.length
+    };
+
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Rechazar solicitud de seguimiento
+ */
+const rechazarSolicitudSeguimiento = async (usuarioId, solicitanteId) => {
+  try {
+    const usuario = await Usuario.findById(usuarioId);
+
+    if (!usuario) {
+      throw new Error('Usuario no encontrado');
+    }
+
+    // Buscar la solicitud pendiente
+    const solicitud = usuario.solicitudesSeguidores.find(
+      s => s.usuarioId.toString() === solicitanteId.toString() && s.estado === 'pendiente'
+    );
+
+    if (!solicitud) {
+      throw new Error('No se encontró una solicitud pendiente de este usuario');
+    }
+
+    // Marcar solicitud como rechazada
+    solicitud.estado = 'rechazada';
+
+    await usuario.save();
+
+    return {
+      mensaje: 'Solicitud de seguimiento rechazada'
+    };
+
+  } catch (error) {
+    throw error;
+  }
+};
+
 module.exports = {
   // Seguidores
   seguirUsuario,
   dejarDeSeguirUsuario,
   obtenerSeguidores,
   obtenerSeguidos,
+  
+  // Solicitudes de seguimiento
+  obtenerSolicitudesSeguidores,
+  aceptarSolicitudSeguimiento,
+  rechazarSolicitudSeguimiento,
   
   // Bloqueos
   bloquearUsuario,

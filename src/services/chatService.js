@@ -122,8 +122,17 @@ const enviarMensaje = async (chatId, emisorId, contenido, esTemporal = false, ex
 
     // Validar mensaje temporal
     if (esTemporal && expiraEn) {
+      const ahora = new Date();
+      const fechaExpiracion = new Date(expiraEn);
       const unDia = 24 * 60 * 60 * 1000; // 24 horas en milisegundos
-      if (new Date(expiraEn).getTime() - Date.now() > unDia) {
+      
+      // Verificar que la fecha de expiración sea en el futuro
+      if (fechaExpiracion <= ahora) {
+        throw new Error('La fecha de expiración debe ser en el futuro');
+      }
+      
+      // Verificar que no dure más de 1 día
+      if (fechaExpiracion.getTime() - ahora.getTime() > unDia) {
         throw new Error('Los mensajes temporales no pueden durar más de 1 día');
       }
     }
@@ -181,11 +190,19 @@ const obtenerMensajes = async (chatId, usuarioId, pagina = 1, limite = 50) => {
       throw new Error('Chat no encontrado o no tienes acceso a él');
     }
 
+    // Obtener fecha actual en UTC (los mensajes se guardan en UTC)
+    const ahora = new Date();
+    
+    console.log(`🌍 Fecha actual UTC: ${ahora.toISOString()}`);
+
     const mensajes = await MensajeChat.find({
       chatId,
       $or: [
         { esTemporal: false },
-        { esTemporal: true, expiraEn: { $gt: new Date() } }
+        { 
+          esTemporal: true, 
+          expiraEn: { $gt: ahora } // Solo mensajes temporales que no han expirado
+        }
       ]
     })
       .populate('emisorId', 'nombreCompleto fotoPerfil nombreUsuario')
@@ -197,7 +214,10 @@ const obtenerMensajes = async (chatId, usuarioId, pagina = 1, limite = 50) => {
       chatId,
       $or: [
         { esTemporal: false },
-        { esTemporal: true, expiraEn: { $gt: new Date() } }
+        { 
+          esTemporal: true, 
+          expiraEn: { $gt: ahora } // Solo mensajes temporales que no han expirado
+        }
       ]
     });
 

@@ -16,10 +16,10 @@ const ReaccionSchema = new Schema({
   tipo: {
     type: String,
     enum: {
-      values: ['like', 'love', 'haha', 'wow', 'sad', 'angry'],
-      message: 'El tipo de reacción debe ser: like, love, haha, wow, sad o angry'
+      values: ['like'],
+      message: 'El tipo de reacción debe ser: like'
     },
-    required: [true, 'El tipo de reacción es obligatorio']
+    default: 'like'
   },
   fecha: {
     type: Date,

@@ -1,6 +1,7 @@
 const redSocialService = require('../services/redSocialService');
 const publicacionesService = require('../services/publicacionesService');
 const recursosInformativosService = require('../services/recursosInformativosService');
+const encuestasService = require('../services/encuestasService');
 const { config } = require('../config');
 
 /**
@@ -24,12 +25,13 @@ const buscarGeneral = async (req, res) => {
       usuarios: [],
       publicaciones: [],
       recursos: [],
+      encuestas: [],
       totalResultados: 0
     };
 
     // Buscar usuarios si no se especifica tipo o si se busca específicamente usuarios
     if (!tipo || tipo === 'usuarios' || tipo === 'todo') {
-      const usuariosResult = await redSocialService.buscarUsuarios(termino, parseInt(pagina), parseInt(limite));
+      const usuariosResult = await redSocialService.buscarUsuarios(termino, parseInt(pagina), parseInt(limite), usuarioActualId);
       resultados.usuarios = usuariosResult.usuarios;
       resultados.totalResultados += usuariosResult.paginacion.totalElementos;
     }
@@ -50,6 +52,18 @@ const buscarGeneral = async (req, res) => {
       } catch (error) {
         console.log('⚠️ Error buscando recursos informativos:', error.message);
         // Continuar sin recursos si hay error
+      }
+    }
+
+    // Buscar encuestas si no se especifica tipo o si se busca específicamente encuestas
+    if (!tipo || tipo === 'encuestas' || tipo === 'todo') {
+      try {
+        const encuestasResult = await encuestasService.obtenerEncuestas({ busqueda: termino });
+        resultados.encuestas = encuestasResult.slice(0, parseInt(limite));
+        resultados.totalResultados += encuestasResult.length;
+      } catch (error) {
+        console.log('⚠️ Error buscando encuestas:', error.message);
+        // Continuar sin encuestas si hay error
       }
     }
 
@@ -96,7 +110,7 @@ const obtenerSugerencias = async (req, res) => {
 
     // Obtener sugerencias de usuarios
     try {
-      const usuariosResult = await redSocialService.buscarUsuarios(termino, 1, parseInt(limite));
+      const usuariosResult = await redSocialService.buscarUsuarios(termino, 1, parseInt(limite), usuarioActualId);
       sugerencias.push(...usuariosResult.usuarios.map(usuario => ({
         tipo: 'usuario',
         id: usuario._id,
@@ -134,6 +148,20 @@ const obtenerSugerencias = async (req, res) => {
       })));
     } catch (error) {
       console.log('⚠️ Error obteniendo sugerencias de recursos:', error.message);
+    }
+
+    // Obtener sugerencias de encuestas
+    try {
+      const encuestasResult = await encuestasService.obtenerEncuestas({ busqueda: termino });
+      sugerencias.push(...encuestasResult.slice(0, parseInt(limite)).map(encuesta => ({
+        tipo: 'encuesta',
+        id: encuesta._id,
+        titulo: encuesta.titulo,
+        subtitulo: encuesta.descripcion.substring(0, 50) + (encuesta.descripcion.length > 50 ? '...' : ''),
+        imagen: null
+      })));
+    } catch (error) {
+      console.log('⚠️ Error obteniendo sugerencias de encuestas:', error.message);
     }
 
     // Limitar el número total de sugerencias

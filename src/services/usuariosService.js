@@ -163,6 +163,88 @@ class UsuariosService {
   }
 
   /**
+   * Aplicar restricciones de visualización a un usuario
+   * @param {Object} usuario - Usuario a filtrar
+   * @param {string} usuarioActualId - ID del usuario que está consultando
+   * @param {boolean} incluirDatosSensibles - Si incluir datos sensibles (solo para el propio usuario)
+   * @returns {Object} Usuario con restricciones aplicadas
+   */
+  aplicarRestriccionesVisualizacion(usuario, usuarioActualId = null, incluirDatosSensibles = false) {
+    // Si el usuario es anónimo, solo mostrar información básica
+    if (usuario.anonimo) {
+      return {
+        _id: usuario._id,
+        nombreCompleto: 'Usuario Anónimo',
+        nombreUsuario: usuario.nombreUsuario,
+        fotoPerfil: null,
+        visibilidadPerfil: 'anonimo',
+        anonimo: true,
+        fechaRegistro: usuario.fechaRegistro
+      };
+    }
+
+    // Si el perfil es privado, verificar permisos
+    if (usuario.visibilidadPerfil === 'privado') {
+      // Si no hay usuario autenticado, mostrar información básica
+      if (!usuarioActualId) {
+        return {
+          _id: usuario._id,
+          nombreCompleto: usuario.nombreCompleto,
+          nombreUsuario: usuario.nombreUsuario,
+          fotoPerfil: null,
+          visibilidadPerfil: 'privado',
+          anonimo: false,
+          fechaRegistro: usuario.fechaRegistro
+        };
+      }
+
+      // Si el usuario actual es el mismo usuario, mostrar toda la información
+      if (usuario._id.toString() === usuarioActualId.toString()) {
+        return usuario;
+      }
+
+      // Verificar si el usuario actual es seguidor
+      const esSeguidor = usuario.seguidores && usuario.seguidores.some(seguidor => 
+        seguidor.toString() === usuarioActualId.toString()
+      );
+
+      if (!esSeguidor) {
+        return {
+          _id: usuario._id,
+          nombreCompleto: usuario.nombreCompleto,
+          nombreUsuario: usuario.nombreUsuario,
+          fotoPerfil: null,
+          visibilidadPerfil: 'privado',
+          anonimo: false,
+          fechaRegistro: usuario.fechaRegistro
+        };
+      }
+    }
+
+    // Perfil público - mostrar información según permisos
+    const usuarioFiltrado = {
+      _id: usuario._id,
+      nombreCompleto: usuario.nombreCompleto,
+      nombreUsuario: usuario.nombreUsuario,
+      fotoPerfil: usuario.fotoPerfil,
+      visibilidadPerfil: usuario.visibilidadPerfil,
+      anonimo: usuario.anonimo,
+      fechaRegistro: usuario.fechaRegistro
+    };
+
+    // Si es el propio usuario o tiene permisos especiales, incluir datos adicionales
+    if (incluirDatosSensibles || (usuarioActualId && usuario._id.toString() === usuarioActualId.toString())) {
+      usuarioFiltrado.biografia = usuario.biografia;
+      usuarioFiltrado.pronombres = usuario.pronombres;
+      usuarioFiltrado.genero = usuario.genero;
+      usuarioFiltrado.seguidores = usuario.seguidores;
+      usuarioFiltrado.seguidos = usuario.seguidos;
+    }
+
+    return usuarioFiltrado;
+  }
+
+  /**
    * Obtener información pública de un usuario
    * @param {string} id - ID del usuario
    * @param {string} usuarioActualId - ID del usuario que está consultando
@@ -175,49 +257,7 @@ class UsuariosService {
       throw new Error('No existe un usuario con el ID proporcionado');
     }
 
-    // Si el usuario es anónimo, solo mostrar información básica
-    if (usuario.anonimo) {
-      return {
-        nombreCompleto: 'Usuario Anónimo',
-        nombreUsuario: usuario.nombreUsuario,
-        anonimo: true,
-        fechaRegistro: usuario.fechaRegistro
-      };
-    }
-
-    // Si el perfil es privado, verificar si el usuario actual es seguidor
-    if (usuario.visibilidadPerfil === 'privado') {
-      // Si no hay usuario autenticado, solo mostrar información básica
-      if (!usuarioActualId) {
-        return {
-          nombreCompleto: usuario.nombreCompleto,
-          nombreUsuario: usuario.nombreUsuario,
-          visibilidadPerfil: 'privado',
-          fechaRegistro: usuario.fechaRegistro
-        };
-      }
-
-      // Si el usuario actual es el mismo usuario, mostrar toda la información
-      if (usuario._id.toString() === usuarioActualId.toString()) {
-        return usuario;
-      }
-
-      // Verificar si el usuario actual es seguidor
-      const esSeguidor = usuario.seguidores.some(seguidor => 
-        seguidor.toString() === usuarioActualId.toString()
-      );
-
-      if (!esSeguidor) {
-        return {
-          nombreCompleto: usuario.nombreCompleto,
-          nombreUsuario: usuario.nombreUsuario,
-          visibilidadPerfil: 'privado',
-          fechaRegistro: usuario.fechaRegistro
-        };
-      }
-    }
-
-    return usuario;
+    return this.aplicarRestriccionesVisualizacion(usuario, usuarioActualId, false);
   }
 
   /**

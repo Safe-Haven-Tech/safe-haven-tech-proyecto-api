@@ -396,17 +396,9 @@ const marcarTodasLasNotificacionesComoLeidas = async (req, res) => {
 const reaccionarAPublicacion = async (req, res) => {
   try {
     const { publicacionId } = req.params;
-    const { tipo } = req.body;
     const usuarioActualId = req.usuario.userId;
 
-    if (!tipo) {
-      return res.status(400).json({
-        error: 'Tipo de reacción requerido',
-        detalles: 'Debes especificar el tipo de reacción'
-      });
-    }
-
-    const resultado = await redSocialService.reaccionarAPublicacion(publicacionId, usuarioActualId, tipo);
+    const resultado = await redSocialService.reaccionarAPublicacion(publicacionId, usuarioActualId);
 
     res.json({
       mensaje: resultado.mensaje,
@@ -518,6 +510,7 @@ const obtenerFeed = async (req, res) => {
 const buscarUsuarios = async (req, res) => {
   try {
     const { termino, pagina = 1, limite = 20 } = req.query;
+    const usuarioActualId = req.usuario.userId;
 
     if (!termino) {
       return res.status(400).json({
@@ -526,7 +519,7 @@ const buscarUsuarios = async (req, res) => {
       });
     }
 
-    const resultado = await redSocialService.buscarUsuarios(termino, parseInt(pagina), parseInt(limite));
+    const resultado = await redSocialService.buscarUsuarios(termino, parseInt(pagina), parseInt(limite), usuarioActualId);
 
     res.json({
       ...resultado,
@@ -576,12 +569,137 @@ const buscarPublicaciones = async (req, res) => {
   }
 };
 
+// ==================== SOLICITUDES DE SEGUIMIENTO ====================
+
+/**
+ * @desc    Obtener solicitudes de seguimiento pendientes
+ * @route   GET /api/red-social/solicitudes
+ * @access  Private
+ */
+const obtenerSolicitudesSeguidores = async (req, res) => {
+  try {
+    const usuarioActualId = req.usuario.userId;
+    const { pagina = 1, limite = 20 } = req.query;
+
+    const resultado = await redSocialService.obtenerSolicitudesSeguidores(usuarioActualId, parseInt(pagina), parseInt(limite));
+
+    res.json({
+      ...resultado,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error al obtener solicitudes:', error);
+
+    if (error.message === 'Usuario no encontrado') {
+      return res.status(404).json({
+        error: 'Usuario no encontrado',
+        detalles: error.message
+      });
+    }
+
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+    });
+  }
+};
+
+/**
+ * @desc    Aceptar solicitud de seguimiento
+ * @route   POST /api/red-social/solicitudes/:solicitanteId/aceptar
+ * @access  Private
+ */
+const aceptarSolicitudSeguimiento = async (req, res) => {
+  try {
+    const { solicitanteId } = req.params;
+    const usuarioActualId = req.usuario.userId;
+
+    const resultado = await redSocialService.aceptarSolicitudSeguimiento(usuarioActualId, solicitanteId);
+
+    res.json({
+      mensaje: resultado.mensaje,
+      seguidores: resultado.seguidores,
+      seguidos: resultado.seguidos,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error al aceptar solicitud:', error);
+
+    if (error.message === 'Usuario no encontrado') {
+      return res.status(404).json({
+        error: 'Usuario no encontrado',
+        detalles: error.message
+      });
+    }
+
+    if (error.message === 'No se encontró una solicitud pendiente de este usuario') {
+      return res.status(404).json({
+        error: 'Solicitud no encontrada',
+        detalles: error.message
+      });
+    }
+
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+    });
+  }
+};
+
+/**
+ * @desc    Rechazar solicitud de seguimiento
+ * @route   POST /api/red-social/solicitudes/:solicitanteId/rechazar
+ * @access  Private
+ */
+const rechazarSolicitudSeguimiento = async (req, res) => {
+  try {
+    const { solicitanteId } = req.params;
+    const usuarioActualId = req.usuario.userId;
+
+    const resultado = await redSocialService.rechazarSolicitudSeguimiento(usuarioActualId, solicitanteId);
+
+    res.json({
+      mensaje: resultado.mensaje,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error al rechazar solicitud:', error);
+
+    if (error.message === 'Usuario no encontrado') {
+      return res.status(404).json({
+        error: 'Usuario no encontrado',
+        detalles: error.message
+      });
+    }
+
+    if (error.message === 'No se encontró una solicitud pendiente de este usuario') {
+      return res.status(404).json({
+        error: 'Solicitud no encontrada',
+        detalles: error.message
+      });
+    }
+
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+    });
+  }
+};
+
 module.exports = {
   // Seguidores
   seguirUsuario,
   dejarDeSeguirUsuario,
   obtenerSeguidores,
   obtenerSeguidos,
+  
+  // Solicitudes de seguimiento
+  obtenerSolicitudesSeguidores,
+  aceptarSolicitudSeguimiento,
+  rechazarSolicitudSeguimiento,
   
   // Bloqueos
   bloquearUsuario,

@@ -1,4 +1,5 @@
 const chatService = require('../services/chatService');
+const MensajeChat = require('../models/MensajeChat');
 const { config } = require('../config');
 const { uploadCualquierArchivoChat } = require('../utils/multerChat');
 
@@ -124,26 +125,20 @@ const enviarMensaje = async (req, res) => {
     const { contenido, esTemporal, expiraEn } = req.body;
     const usuarioActualId = req.usuario.userId;
 
-    if (!contenido && (!req.files || req.files.length === 0)) {
+    if (!contenido) {
       return res.status(400).json({
-        error: 'Contenido o archivo requerido',
-        detalles: 'El mensaje debe tener contenido de texto o al menos un archivo'
+        error: 'Contenido requerido',
+        detalles: 'El mensaje debe tener contenido de texto'
       });
-    }
-
-    // Procesar archivos adjuntos si existen
-    let archivosAdjuntos = [];
-    if (req.files && req.files.length > 0) {
-      archivosAdjuntos = req.files.map(file => file.path);
     }
 
     const mensaje = await chatService.enviarMensaje(
       chatId,
       usuarioActualId,
-      contenido || '',
+      contenido,
       esTemporal || false,
       expiraEn ? new Date(expiraEn) : null,
-      archivosAdjuntos
+      [] // Sin archivos adjuntos en este endpoint
     );
 
     res.status(201).json({
@@ -168,6 +163,62 @@ const enviarMensaje = async (req, res) => {
         detalles: error.message
       });
     }
+
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+    });
+  }
+};
+
+/**
+ * @desc    Subir archivos adjuntos a un mensaje
+ * @route   POST /api/chat/:chatId/mensajes/:mensajeId/archivos
+ * @access  Private
+ */
+const subirArchivosAMensaje = async (req, res) => {
+  try {
+    const { chatId, mensajeId } = req.params;
+    const usuarioActualId = req.usuario.userId;
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        error: 'Archivos requeridos',
+        detalles: 'Debes proporcionar al menos un archivo'
+      });
+    }
+
+    // Verificar que el mensaje existe y pertenece al usuario
+    const mensaje = await MensajeChat.findOne({
+      _id: mensajeId,
+      chatId: chatId,
+      emisorId: usuarioActualId
+    });
+
+    if (!mensaje) {
+      return res.status(404).json({
+        error: 'Mensaje no encontrado',
+        detalles: 'El mensaje no existe o no tienes permisos para modificarlo'
+      });
+    }
+
+    // Procesar archivos adjuntos
+    const archivosAdjuntos = req.files.map(file => file.path);
+
+    // Actualizar el mensaje con los nuevos archivos
+    mensaje.archivosAdjuntos = [...mensaje.archivosAdjuntos, ...archivosAdjuntos];
+    await mensaje.save();
+
+    res.json({
+      mensaje: 'Archivos adjuntos agregados exitosamente',
+      archivosAdjuntos: mensaje.archivosAdjuntos,
+      archivosNuevos: archivosAdjuntos,
+      totalArchivos: mensaje.archivosAdjuntos.length,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error al subir archivos al mensaje:', error);
 
     res.status(500).json({
       error: 'Error interno del servidor',
@@ -318,6 +369,7 @@ module.exports = {
   obtenerChats,
   obtenerChatPorId,
   enviarMensaje,
+  subirArchivosAMensaje,
   obtenerMensajes,
   marcarMensajesComoLeidos,
   eliminarMensaje,

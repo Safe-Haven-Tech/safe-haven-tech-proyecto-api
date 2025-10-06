@@ -15,8 +15,8 @@ const NotificacionSchema = new Schema({
   tipo: {
     type: String,
     enum: {
-      values: ['respuesta', 'reaccion', 'nuevo_seguidor', 'mensaje_privado', 'otro'],
-      message: 'El tipo debe ser: respuesta, reaccion, nuevo_seguidor, mensaje_privado u otro'
+      values: ['respuesta', 'reaccion', 'nuevo_seguidor', 'mensaje_privado', 'solicitud_seguimiento', 'solicitud_aceptada', 'otro'],
+      message: 'El tipo debe ser: respuesta, reaccion, nuevo_seguidor, mensaje_privado, solicitud_seguimiento, solicitud_aceptada u otro'
     },
     required: [true, 'El tipo de notificación es obligatorio']
   },

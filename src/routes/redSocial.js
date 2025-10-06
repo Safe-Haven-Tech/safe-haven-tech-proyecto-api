@@ -36,6 +36,29 @@ router.get('/seguidores/:usuarioId', redSocialController.obtenerSeguidores);
  */
 router.get('/seguidos/:usuarioId', redSocialController.obtenerSeguidos);
 
+// ==================== SOLICITUDES DE SEGUIMIENTO ====================
+
+/**
+ * @route   GET /api/red-social/solicitudes
+ * @desc    Obtener solicitudes de seguimiento pendientes
+ * @access  Private
+ */
+router.get('/solicitudes', redSocialController.obtenerSolicitudesSeguidores);
+
+/**
+ * @route   POST /api/red-social/solicitudes/:solicitanteId/aceptar
+ * @desc    Aceptar solicitud de seguimiento
+ * @access  Private
+ */
+router.post('/solicitudes/:solicitanteId/aceptar', redSocialController.aceptarSolicitudSeguimiento);
+
+/**
+ * @route   POST /api/red-social/solicitudes/:solicitanteId/rechazar
+ * @desc    Rechazar solicitud de seguimiento
+ * @access  Private
+ */
+router.post('/solicitudes/:solicitanteId/rechazar', redSocialController.rechazarSolicitudSeguimiento);
+
 // ==================== BLOQUEOS ====================
 
 /**

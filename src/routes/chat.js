@@ -42,10 +42,17 @@ router.get('/:chatId', chatController.obtenerChatPorId);
 
 /**
  * @route   POST /api/chat/:chatId/mensajes
- * @desc    Enviar un mensaje
+ * @desc    Enviar un mensaje (solo texto)
  * @access  Private
  */
-router.post('/:chatId/mensajes', uploadCualquierArchivoChat, handleMulterError, chatController.enviarMensaje);
+router.post('/:chatId/mensajes', chatController.enviarMensaje);
+
+/**
+ * @route   POST /api/chat/:chatId/mensajes/:mensajeId/archivos
+ * @desc    Subir archivos adjuntos a un mensaje
+ * @access  Private
+ */
+router.post('/:chatId/mensajes/:mensajeId/archivos', uploadCualquierArchivoChat, handleMulterError, chatController.subirArchivosAMensaje);
 
 /**
  * @route   GET /api/chat/:chatId/mensajes
