@@ -123,8 +123,9 @@ const obtenerUsuarios = async (req, res) => {
 const obtenerUsuarioPublico = async (req, res) => {
   try {
     const { id } = req.params;
+    const usuarioActualId = req.usuario ? req.usuario.id : null;
     
-    const usuario = await usuariosService.obtenerUsuarioPublico(id);
+    const usuario = await usuariosService.obtenerUsuarioPublico(id, usuarioActualId);
     
     res.json({
       mensaje: 'Información pública del usuario obtenida exitosamente',
@@ -138,6 +139,13 @@ const obtenerUsuarioPublico = async (req, res) => {
     if (error.message === 'No existe un usuario con el ID proporcionado') {
       return res.status(404).json({
         error: 'Usuario no encontrado',
+        detalles: error.message
+      });
+    }
+
+    if (error.message === 'No tienes permisos para ver este perfil') {
+      return res.status(403).json({
+        error: 'Acceso denegado',
         detalles: error.message
       });
     }

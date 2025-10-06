@@ -2,8 +2,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Crear directorio de uploads si no existe
-const uploadDir = path.join(__dirname, '../uploads/publicaciones');
+// Crear directorio de uploads para chat si no existe
+const uploadDir = path.join(__dirname, '../uploads/chat');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -17,11 +17,11 @@ const storage = multer.diskStorage({
     // Generar nombre único para el archivo
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const extension = path.extname(file.originalname);
-    cb(null, `publicacion_${uniqueSuffix}${extension}`);
+    cb(null, `chat_${uniqueSuffix}${extension}`);
   }
 });
 
-// Filtro de archivos permitidos
+// Filtro de archivos permitidos para chat
 const fileFilter = (req, file, cb) => {
   const allowedTypes = {
     // Imágenes
@@ -32,16 +32,13 @@ const fileFilter = (req, file, cb) => {
     'image/webp': '.webp',
     'image/svg+xml': '.svg',
     'image/bmp': '.bmp',
-    'image/tiff': '.tiff',
-    // Videos
+    // Videos (tamaño limitado para chat)
     'video/mp4': '.mp4',
     'video/webm': '.webm',
     'video/ogg': '.ogg',
     'video/avi': '.avi',
     'video/mov': '.mov',
     'video/wmv': '.wmv',
-    'video/flv': '.flv',
-    'video/mkv': '.mkv',
     'video/3gp': '.3gp',
     // Audio
     'audio/mp3': '.mp3',
@@ -73,28 +70,23 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Configuración de multer
+// Configuración de multer para chat
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB máximo por archivo (para videos)
-    files: 10 // Máximo 10 archivos por request
+    fileSize: 50 * 1024 * 1024, // 50MB máximo por archivo (menor que publicaciones)
+    files: 5 // Máximo 5 archivos por mensaje
   }
 });
 
-// Middleware para subir archivos multimedia (publicaciones de perfil)
-const uploadMultimedia = upload.fields([
-  { name: 'multimedia', maxCount: 10 }
-]);
-
-// Middleware para subir archivos adjuntos (publicaciones de foro)
-const uploadAdjuntos = upload.fields([
+// Middleware para subir archivos adjuntos en chat
+const uploadArchivosChat = upload.fields([
   { name: 'archivosAdjuntos', maxCount: 5 }
 ]);
 
-// Middleware para subir cualquier tipo de archivo
-const uploadCualquierArchivo = upload.any();
+// Middleware para subir cualquier archivo en chat
+const uploadCualquierArchivoChat = upload.any();
 
 // Función para eliminar archivo
 const eliminarArchivo = (filePath) => {
@@ -112,13 +104,12 @@ const eliminarArchivo = (filePath) => {
 
 // Función para obtener la URL del archivo
 const obtenerUrlArchivo = (filename) => {
-  return `/uploads/publicaciones/${filename}`;
+  return `/uploads/chat/${filename}`;
 };
 
 module.exports = {
-  uploadMultimedia,
-  uploadAdjuntos,
-  uploadCualquierArchivo,
+  uploadArchivosChat,
+  uploadCualquierArchivoChat,
   eliminarArchivo,
   obtenerUrlArchivo
 };

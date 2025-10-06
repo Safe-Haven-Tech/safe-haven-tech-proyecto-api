@@ -376,6 +376,90 @@ const darLike = async (req, res) => {
 };
 
 /**
+ * @desc    Reaccionar a una publicación
+ * @route   POST /api/publicaciones/:id/reaccionar
+ * @access  Private
+ */
+const reaccionarAPublicacion = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tipo } = req.body;
+    const usuarioId = req.usuario.userId;
+
+    if (!tipo) {
+      return res.status(400).json({
+        error: 'Tipo de reacción requerido',
+        detalles: 'Debes especificar el tipo de reacción'
+      });
+    }
+
+    const resultado = await publicacionesService.reaccionarAPublicacion(id, usuarioId, tipo);
+
+    res.json({
+      mensaje: resultado.mensaje,
+      reaccion: resultado.reaccion,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error al reaccionar a publicación:', error);
+
+    if (error.message === 'Publicación no encontrada') {
+      return res.status(404).json({
+        error: 'Publicación no encontrada',
+        detalles: error.message
+      });
+    }
+
+    if (error.message === 'No tienes permisos para ver esta publicación') {
+      return res.status(403).json({
+        error: 'Acceso denegado',
+        detalles: error.message
+      });
+    }
+
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Quitar reacción de una publicación
+ * @route   DELETE /api/publicaciones/:id/reaccionar
+ * @access  Private
+ */
+const quitarReaccionDePublicacion = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const usuarioId = req.usuario.userId;
+
+    const resultado = await publicacionesService.quitarReaccionDePublicacion(id, usuarioId);
+
+    res.json({
+      mensaje: resultado.mensaje,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error al quitar reacción:', error);
+
+    if (error.message === 'No tienes una reacción en esta publicación') {
+      return res.status(400).json({
+        error: 'Acción no permitida',
+        detalles: error.message
+      });
+    }
+
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: error.message
+    });
+  }
+};
+
+/**
  * @desc    Quitar like de una publicación
  * @route   DELETE /api/publicaciones/:id/like
  * @access  Private
@@ -529,6 +613,8 @@ module.exports = {
   eliminarPublicacion,
   darLike,
   quitarLike,
+  reaccionarAPublicacion,
+  quitarReaccionDePublicacion,
   crearComentario,
   obtenerComentarios,
   denunciarPublicacion

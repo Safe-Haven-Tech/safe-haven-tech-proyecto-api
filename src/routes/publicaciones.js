@@ -26,6 +26,8 @@ const {
   eliminarPublicacion,
   darLike,
   quitarLike,
+  reaccionarAPublicacion,
+  quitarReaccionDePublicacion,
   denunciarPublicacion,
   obtenerComentarios,
   crearComentario
@@ -46,6 +48,8 @@ router.put('/:id', autenticarToken, validarActualizacionPublicacion, actualizarP
 router.delete('/:id', autenticarToken, eliminarPublicacion);
 router.post('/:id/like', autenticarToken, darLike);
 router.delete('/:id/like', autenticarToken, quitarLike);
+router.post('/:id/reaccionar', autenticarToken, reaccionarAPublicacion);
+router.delete('/:id/reaccionar', autenticarToken, quitarReaccionDePublicacion);
 router.post('/:id/denunciar', autenticarToken, validarDenuncia, denunciarPublicacion);
 router.post('/:id/comentarios', autenticarToken, validarComentario, crearComentario);
 
