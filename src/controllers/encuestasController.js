@@ -168,18 +168,19 @@ const crearEncuesta = async (req, res) => {
  */
 const obtenerEncuestas = async (req, res) => {
   try {
-    const { categoria, busqueda } = req.query;
+    const { categoria, busqueda, activa } = req.query; 
     const filtros = {};
-    
     if (categoria) filtros.categoria = categoria;
     if (busqueda) filtros.busqueda = busqueda;
+    if (activa !== undefined) filtros.activa = activa; 
 
-    const encuestas = await encuestasService.obtenerEncuestas(filtros);
+    const resultado = await encuestasService.obtenerEncuestas(filtros);
 
     res.status(200).json({
       mensaje: 'Encuestas obtenidas exitosamente',
-      total: encuestas.length,
-      encuestas,
+      total: resultado.encuestas.length,
+      encuestas: resultado.encuestas,
+      paginacion: resultado.paginacion,
       timestamp: new Date().toISOString()
     });
 
@@ -192,7 +193,6 @@ const obtenerEncuestas = async (req, res) => {
     });
   }
 };
-
 /**
  * @desc    Obtener una encuesta por ID
  * @route   GET /api/encuestas/:id
@@ -330,6 +330,22 @@ const desactivarEncuesta = async (req, res) => {
       error: 'Error interno del servidor',
       detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
     });
+  }
+};
+
+
+/**
+ * @desc    Eliminar una encuesta (solo administradores)
+ * @route   DELETE /api/encuestas/:id
+ * @access  Private (solo administradores)
+ */
+const eliminarEncuesta = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await encuestasService.eliminarEncuesta(id);
+    res.status(200).json({ mensaje: 'Encuesta eliminada correctamente' });
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al eliminar la encuesta', error: error.message });
   }
 };
 
@@ -672,6 +688,7 @@ module.exports = {
   obtenerEncuestaPorId,
   actualizarEncuesta,
   desactivarEncuesta,
+  eliminarEncuesta,
   activarEncuesta,
   completarEncuesta,
   obtenerRespuestasUsuario,

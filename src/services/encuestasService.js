@@ -46,12 +46,15 @@ const crearEncuesta = async (datosEncuesta) => {
  */
 const obtenerEncuestas = async (filtros = {}) => {
   try {
-    const query = { activa: true };
-    
-    if (filtros.categoria) {
-      query.categoria = filtros.categoria;
+    // Convierte el filtro activa a booleano si viene como string
+    if (typeof filtros.activa === 'string') {
+      if (filtros.activa === 'true') filtros.activa = true;
+      else if (filtros.activa === 'false') filtros.activa = false;
     }
-    
+
+    const query = {};
+    if (typeof filtros.activa === 'boolean') query.activa = filtros.activa;
+    if (filtros.categoria) query.categoria = filtros.categoria;
     if (filtros.busqueda) {
       query.$or = [
         { titulo: { $regex: filtros.busqueda, $options: 'i' } },
@@ -59,11 +62,27 @@ const obtenerEncuestas = async (filtros = {}) => {
       ];
     }
 
+    // Paginación
+    const pagina = parseInt(filtros.pagina) || 1;
+    const limite = parseInt(filtros.limite) || 10;
+    const skip = (pagina - 1) * limite;
+
     const encuestas = await Encuesta.find(query)
       .populate('creadoPor', 'nombreCompleto nombreUsuario')
-      .sort({ fechaCreacion: -1 });
+      .sort({ fechaCreacion: -1 })
+      .skip(skip)
+      .limit(limite);
 
-    return encuestas;
+    const total = await Encuesta.countDocuments(query);
+
+    return {
+      encuestas,
+      paginacion: {
+        paginaActual: pagina,
+        totalPaginas: Math.ceil(total / limite),
+        total
+      }
+    };
   } catch (error) {
     throw error;
   }
@@ -554,6 +573,16 @@ const generarPDFSinAuth = async (respuestaTemporal, encuesta) => {
   }
 };
 
+/**
+ * @desc    Eliminar una encuesta
+ * @param   {string} encuestaId - ID de la encuesta
+ * @returns {Object} Resultado de la eliminación
+ */
+const eliminarEncuesta = async (encuestaId) => {
+  return await Encuesta.findByIdAndDelete(encuestaId);
+};
+
+
 module.exports = {
   crearEncuesta,
   obtenerEncuestas,
@@ -568,4 +597,5 @@ module.exports = {
   obtenerRespuestasUsuario,
   obtenerEstadisticasEncuesta,
   generarPDFSinAuth,
+  eliminarEncuesta,
 };

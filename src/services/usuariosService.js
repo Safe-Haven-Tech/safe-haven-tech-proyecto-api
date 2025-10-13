@@ -399,32 +399,33 @@ class UsuariosService {
     };
   }
 
-  async eliminarUsuario(id, contraseña) {
-    const usuario = await Usuario.findById(id);
-    if (!usuario) {
-      throw new Error('No existe un usuario con el ID proporcionado');
-    }
-  
-    // Validar contraseña
-    const coinciden = await bcrypt.compare(contraseña, usuario.contraseña);
-    if (!coinciden) {
+async eliminarUsuario(id, contraseña = null) {
+  const usuario = await Usuario.findById(id);
+  if (!usuario) {
+    throw new Error('No existe un usuario con el ID proporcionado');
+  }
+
+ 
+  if (contraseña !== null) {
+    const esValida = await bcrypt.compare(contraseña, usuario.contraseña);
+    if (!esValida) {
       throw new Error('Contraseña incorrecta');
     }
-  
-    // Si tiene foto en Cloudinary, eliminarla
-    if (usuario.fotoPerfil) {
-      const publicId = usuario.fotoPerfil.match(/\/usuarios\/(usuario_\w+)/)?.[1];
-      if (publicId) {
-        await cloudinary.uploader.destroy(`usuarios/${publicId}`);
-      }
+  }
+
+ 
+  if (usuario.fotoPerfil) {
+    try {
+      await eliminarImagenCloudinary(usuario.fotoPerfil);
+    } catch (err) {
+      // No detener el proceso si falla la eliminación de la imagen
+      console.warn('No se pudo eliminar la foto de perfil en Cloudinary:', err.message);
     }
-  
-    // Eliminar usuario de la DB
-    await Usuario.findByIdAndDelete(id);
-  
-    console.log(`✅ Usuario eliminado: ${usuario.correo}`);
-    return true;
-  }  
+  }
+
+  await Usuario.findByIdAndDelete(id);
+  return true;
+}
 
  async crearUsuarioAnonimo()  {
   const randomId = Math.random().toString(36).substring(2, 10);

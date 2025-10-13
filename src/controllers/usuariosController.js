@@ -465,41 +465,26 @@ const activarUsuario = async (req, res) => {
 const eliminarUsuario = async (req, res) => {
   try {
     const { id } = req.params;
-    const { contraseña } = req.body;
+    const { contraseña } = req.body || {};
+    const { userId, rol } = req.usuario;
 
-    if (!contraseña) {
-      return res.status(400).json({
-        error: 'Contraseña requerida',
-        detalles: 'Debes proporcionar tu contraseña para confirmar la eliminación'
-      });
+    
+    if (rol === 'administrador') {
+      await usuariosService.eliminarUsuario(id);
+      return res.json({ mensaje: 'Usuario eliminado por administrador', timestamp: new Date().toISOString() });
     }
 
-    // Obtener usuario actual
-    const usuario = await usuariosService.obtenerUsuarioPorId(id);
-
-    if (!usuario) {
-      return res.status(404).json({
-        error: 'Usuario no encontrado',
-        detalles: `No existe un usuario con ID ${id}`
-      });
+    
+    if (userId === id) {
+      if (!contraseña) {
+        return res.status(400).json({ error: 'Se requiere la contraseña para eliminar la cuenta' });
+      }
+      await usuariosService.eliminarUsuario(id, contraseña);
+      return res.json({ mensaje: 'Usuario eliminado', timestamp: new Date().toISOString() });
     }
 
-    // Si tiene foto en Cloudinary, eliminarla
-    if (usuario.fotoPerfil) {
-      const publicId = usuario.fotoPerfil.match(/\/usuarios\/(usuario_\w+)/)?.[1];
-      await eliminarImagenCloudinary(publicId);
-    }
-
-    // ✅ Invalidar tokens antes de eliminar el usuario
-    authService.invalidarTokens(id);
-
-    // Eliminar usuario
-    await usuariosService.eliminarUsuario(id, contraseña);
-
-    res.json({
-      mensaje: 'Usuario eliminado exitosamente',
-      timestamp: new Date().toISOString()
-    });
+    
+    return res.status(403).json({ error: 'No tienes permisos para eliminar este usuario' });
 
   } catch (error) {
     console.error('❌ Error al eliminar usuario:', error);

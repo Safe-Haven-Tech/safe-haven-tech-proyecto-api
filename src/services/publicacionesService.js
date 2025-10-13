@@ -33,7 +33,8 @@ const crearPublicacion = async (datosPublicacion) => {
     anonimo = false,
     multimedia = [],
     etiquetasUsuarios = [],
-    archivosAdjuntos = []
+    archivosAdjuntos = [],
+    topico // <-- Agregado
   } = datosPublicacion;
 
   // Validar que el autor existe
@@ -67,7 +68,8 @@ const crearPublicacion = async (datosPublicacion) => {
     anonimo,
     multimedia,
     etiquetasUsuarios,
-    archivosAdjuntos
+    archivosAdjuntos,
+    topico // <-- Agregado
   });
 
   await publicacion.save();
@@ -88,7 +90,8 @@ const obtenerPublicaciones = async (filtros = {}, pagina = 1, limite = 10, usuar
     visible,
     busqueda,
     ordenarPor = 'fecha',
-    orden = 'desc'
+    orden = 'desc',
+    topico 
   } = filtros;
 
   const query = {};
@@ -99,30 +102,48 @@ const obtenerPublicaciones = async (filtros = {}, pagina = 1, limite = 10, usuar
   if (anonimo !== undefined) query.anonimo = anonimo;
   if (moderada !== undefined) query.moderada = moderada;
   if (visible !== undefined) query.visible = visible;
+  if (topico) query.topico = topico; 
 
-  // Búsqueda por contenido
+  
   if (busqueda) {
     query.contenido = { $regex: busqueda, $options: 'i' };
   }
 
-  // Configurar ordenamiento
+  
   const sortOptions = {};
   sortOptions[ordenarPor] = orden === 'desc' ? -1 : 1;
 
   const skip = (pagina - 1) * limite;
-
+  
   const publicaciones = await Publicacion.find(query)
-    .populate('autorId', 'nombreCompleto fotoPerfil anonimo visibilidadPerfil seguidores')
+    .populate('autorId', 'nombreCompleto nombreUsuario fotoPerfil anonimo visibilidadPerfil seguidores bloqueados')
     .populate('etiquetasUsuarios', 'nombreCompleto fotoPerfil')
+    .populate({
+      path: 'comentarios',
+      options: { sort: { fecha: -1 }, limit: 2 }, 
+      populate: {
+        path: 'usuarioId',
+        select: 'nombreCompleto fotoPerfil anonimo'
+      }
+    })
     .sort(sortOptions)
     .skip(skip)
     .limit(limite);
 
-  // Filtrar publicaciones según privacidad del perfil
+  // Filtrar publicaciones según privacidad del perfil y bloqueos
   const publicacionesFiltradas = publicaciones.filter(publicacion => {
     // Los administradores pueden ver todas las publicaciones
     if (esAdmin) {
       return true;
+    }
+
+    // Si el autor ha bloqueado al usuario actual, no mostrar la publicación
+    if (
+      usuarioId &&
+      Array.isArray(publicacion.autorId.bloqueados) &&
+      publicacion.autorId.bloqueados.some(bloqueadoId => bloqueadoId.toString() === usuarioId.toString())
+    ) {
+      return false;
     }
 
     // Si no hay usuario autenticado, solo mostrar perfiles públicos
@@ -168,8 +189,12 @@ const obtenerPublicaciones = async (filtros = {}, pagina = 1, limite = 10, usuar
  */
 const obtenerPublicacionPorId = async (id, usuarioId = null, esAdmin = false) => {
   const publicacion = await Publicacion.findById(id)
-    .populate('autorId', 'nombreCompleto fotoPerfil anonimo visibilidadPerfil seguidores')
-    .populate('etiquetasUsuarios', 'nombreCompleto fotoPerfil');
+    .populate('autorId', 'nombreCompleto nombreUsuario fotoPerfil anonimo visibilidadPerfil seguidores')
+    .populate('etiquetasUsuarios', 'nombreCompleto fotoPerfil')
+    .populate({
+      path: 'comentarios',
+      populate: { path: 'usuarioId', select: 'nombreCompleto nombreUsuario fotoPerfil anonimo' }
+    });
 
   if (!publicacion) {
     throw new Error('No existe una publicación con el ID proporcionado');
@@ -180,8 +205,7 @@ const obtenerPublicacionPorId = async (id, usuarioId = null, esAdmin = false) =>
     return publicacion;
   }
 
-  // Verificar privacidad del perfil
-  // Si no hay usuario autenticado, solo mostrar perfiles públicos
+  // Verificar privacidad del perfil del autor
   if (!usuarioId) {
     if (publicacion.autorId.visibilidadPerfil !== 'publico') {
       throw new Error('No tienes permisos para ver esta publicación');
@@ -189,32 +213,29 @@ const obtenerPublicacionPorId = async (id, usuarioId = null, esAdmin = false) =>
     return publicacion;
   }
 
-  // Si el usuario es el autor, puede ver su propia publicación
+  // El autor puede ver su propia publicación
   if (publicacion.autorId._id.toString() === usuarioId.toString()) {
     return publicacion;
   }
 
-  // Si el perfil es público, mostrar la publicación
+  // Si el perfil es público, cualquier usuario puede ver
   if (publicacion.autorId.visibilidadPerfil === 'publico') {
     return publicacion;
   }
 
-  // Si el perfil es privado, verificar si el usuario es seguidor
+  // Si el perfil es privado, solo seguidores pueden ver
   if (publicacion.autorId.visibilidadPerfil === 'privado') {
-    const esSeguidor = publicacion.autorId.seguidores.some(seguidor => 
+    const esSeguidor = publicacion.autorId.seguidores.some(seguidor =>
       seguidor.toString() === usuarioId.toString()
     );
-    
     if (!esSeguidor) {
       throw new Error('No tienes permisos para ver esta publicación');
     }
-    
     return publicacion;
   }
 
   throw new Error('No tienes permisos para ver esta publicación');
 };
-
 /**
  * Actualizar una publicación
  */
@@ -263,7 +284,7 @@ const actualizarPublicacion = async (id, datosActualizacion, usuarioId, esAdmin 
   }
 
   // Campos que se pueden actualizar
-  const camposPermitidos = ['contenido', 'multimedia', 'etiquetasUsuarios', 'archivosAdjuntos'];
+  const camposPermitidos = ['contenido', 'multimedia', 'etiquetasUsuarios', 'archivosAdjuntos', 'topico'];
   const actualizacion = {};
 
   for (const campo of camposPermitidos) {
@@ -346,18 +367,21 @@ const eliminarPublicacion = async (id, usuarioId, esAdmin = false) => {
  */
 const darLike = async (id, usuarioId) => {
   const publicacion = await Publicacion.findById(id);
-  
-  if (!publicacion) {
-    throw new Error('No existe una publicación con el ID proporcionado');
+
+  if (!publicacion) throw new Error('Publicación no encontrada');
+
+  // Inicializar likes si está undefined
+  if (!Array.isArray(publicacion.likes)) {
+    publicacion.likes = [];
   }
 
-  // Verificar que el usuario no sea el autor
-  if (publicacion.autorId.toString() === usuarioId.toString()) {
-    throw new Error('No puedes dar like a tu propia publicación');
+  // Si el usuario ya dio like, no hacer nada
+  if (publicacion.likes.some(uid => uid.toString() === usuarioId.toString())) {
+    throw new Error('Ya diste like a esta publicación');
   }
 
-  // Incrementar likes
-  publicacion.likes += 1;
+  // Agregar el ID del usuario al array de likes
+  publicacion.likes.push(usuarioId);
   await publicacion.save();
 
   return publicacion;
@@ -368,20 +392,19 @@ const darLike = async (id, usuarioId) => {
  */
 const quitarLike = async (id, usuarioId) => {
   const publicacion = await Publicacion.findById(id);
-  
+
   if (!publicacion) {
     throw new Error('No existe una publicación con el ID proporcionado');
   }
 
-  // Decrementar likes (no puede ser negativo)
-  if (publicacion.likes > 0) {
-    publicacion.likes -= 1;
-    await publicacion.save();
-  }
+  // Eliminar el ID del usuario del array de likes
+  publicacion.likes = publicacion.likes.filter(
+    uid => uid.toString() !== usuarioId.toString()
+  );
+  await publicacion.save();
 
   return publicacion;
 };
-
 /**
  * Moderar una publicación
  */
@@ -498,6 +521,18 @@ const resolverDenuncia = async (denunciaId, moderadorId, estado, observaciones) 
   return denuncia;
 };
 
+async function obtenerPublicacionesPorUsuario(usuarioId, tipo, pagina = 1, limite = 20, topico) {
+  const filtro = { autorId: usuarioId };
+  if (tipo) filtro.tipo = tipo;
+  if (topico) filtro.topico = topico;
+
+  return await Publicacion.find(filtro)
+    .sort({ createdAt: -1 })
+    .skip((pagina - 1) * limite)
+    .limit(limite)
+    .lean();
+}
+
 module.exports = {
   crearPublicacion,
   obtenerPublicaciones,
@@ -508,6 +543,7 @@ module.exports = {
   quitarLike,
   moderarPublicacion,
   crearDenuncia,
+  obtenerPublicacionesPorUsuario,
   obtenerDenuncias,
   resolverDenuncia
 };

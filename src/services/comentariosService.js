@@ -28,7 +28,11 @@ const crearComentario = async (datosComentario) => {
 
   await comentario.save();
   await comentario.populate('usuarioId', 'nombreCompleto fotoPerfil');
-  
+
+  // Agregar el ID del comentario al array de comentarios de la publicación
+  publicacion.comentarios.push(comentario._id);
+  await publicacion.save();
+
   return comentario;
 };
 
@@ -103,19 +107,19 @@ const actualizarComentario = async (id, contenido, usuarioId, esAdmin = false) =
 /**
  * Eliminar un comentario
  */
-const eliminarComentario = async (id, usuarioId, esAdmin = false) => {
-  const comentario = await Comentario.findById(id);
-  
-  if (!comentario) {
-    throw new Error('No existe un comentario con el ID proporcionado');
-  }
+const eliminarComentario = async (comentarioId, usuarioId, esAdmin = false) => {
+  const comentario = await Comentario.findById(comentarioId);
+  if (!comentario) throw new Error('No existe un comentario con el ID proporcionado');
 
-  // Verificar permisos
   if (!esAdmin && comentario.usuarioId.toString() !== usuarioId.toString()) {
     throw new Error('No tienes permisos para eliminar este comentario');
   }
 
-  await Comentario.findByIdAndDelete(id);
+  await Comentario.deleteOne({ _id: comentarioId });
+  await Publicacion.updateOne(
+    { _id: comentario.publicacionId },
+    { $pull: { comentarios: comentarioId } }
+  );
 
   return { mensaje: 'Comentario eliminado exitosamente' };
 };

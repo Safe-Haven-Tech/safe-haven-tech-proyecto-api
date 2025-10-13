@@ -11,7 +11,8 @@ const {
   completarEncuesta,
   obtenerRespuestasUsuario,
   obtenerEstadisticasEncuesta,
-  completarEncuestaSinAuth
+  completarEncuestaSinAuth,
+  eliminarEncuesta,
 } = require('../controllers/encuestasController');
 
 const { verificarRol, autenticarToken,autenticacionOpcional } = require('../middlewares/auth');
@@ -31,6 +32,7 @@ router.put('/:id', [autenticarToken, verificarRol('administrador')], actualizarE
 router.put('/:id/desactivar', [autenticarToken, verificarRol('administrador')], desactivarEncuesta);
 router.put('/:id/activar', [autenticarToken, verificarRol('administrador')], activarEncuesta);
 router.get('/:id/estadisticas', [autenticarToken, verificarRol('administrador')], obtenerEstadisticasEncuesta);
+router.delete('/:id', [autenticarToken, verificarRol('administrador')], eliminarEncuesta);
 
 // ======================= RUTA PÚBLICA GENÉRICA =======================
 router.get('/:id', obtenerEncuestaPorId);

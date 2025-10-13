@@ -28,7 +28,9 @@ const {
   quitarLike,
   denunciarPublicacion,
   obtenerComentarios,
-  crearComentario
+  crearComentario,
+  eliminarComentario,
+  obtenerPublicacionesPorUsuario,
 } = require('../controllers/publicacionesController');
 
 // Rutas públicas
@@ -48,5 +50,11 @@ router.post('/:id/like', autenticarToken, darLike);
 router.delete('/:id/like', autenticarToken, quitarLike);
 router.post('/:id/denunciar', autenticarToken, validarDenuncia, denunciarPublicacion);
 router.post('/:id/comentarios', autenticarToken, validarComentario, crearComentario);
+
+// Eliminar comentario (NUEVA RUTA)
+router.delete('/:id/comentarios/:comentarioId', autenticarToken, eliminarComentario);
+
+//Ruta para obtener publicaciones por usuario
+router.get('/usuario/:usuarioId', obtenerPublicacionesPorUsuario);
 
 module.exports = router;
