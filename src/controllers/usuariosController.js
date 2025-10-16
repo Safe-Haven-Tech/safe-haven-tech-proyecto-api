@@ -478,6 +478,148 @@ const eliminarUsuario = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Denunciar un usuario
+ * @route   POST /api/usuarios/:id/denunciar
+ * @access  Private
+ */
+const denunciarUsuario = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { motivo, descripcion } = req.body;
+    const usuarioId = req.usuario.userId;
+
+    if (!motivo) {
+      return res.status(400).json({
+        error: 'Motivo requerido',
+        detalles: 'El motivo de la denuncia es obligatorio'
+      });
+    }
+
+    const denuncia = await usuariosService.denunciarUsuario({
+      usuarioDenunciadoId: id,
+      usuarioId,
+      motivo,
+      descripcion
+    });
+
+    res.status(201).json({
+      mensaje: 'Denuncia enviada exitosamente',
+      denuncia,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error al denunciar usuario:', error);
+
+    if (error.message === 'No existe un usuario con el ID proporcionado') {
+      return res.status(404).json({
+        error: 'Usuario no encontrado',
+        detalles: error.message
+      });
+    }
+
+    if (error.message === 'No puedes denunciarte a ti mismo') {
+      return res.status(400).json({
+        error: 'Acción no permitida',
+        detalles: error.message
+      });
+    }
+
+    if (error.message.includes('Ya has denunciado')) {
+      return res.status(400).json({
+        error: 'Denuncia duplicada',
+        detalles: error.message
+      });
+    }
+
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+    });
+  }
+};
+
+/**
+ * @desc    Actualizar información profesional
+ * @route   PUT /api/usuarios/:id/info-profesional
+ * @access  Private (profesional propio o administrador)
+ */
+const actualizarInfoProfesional = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const infoProfesional = req.body;
+
+    const usuario = await usuariosService.actualizarInfoProfesional(id, infoProfesional);
+
+    res.json({
+      mensaje: 'Información profesional actualizada exitosamente',
+      usuario,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error al actualizar información profesional:', error);
+
+    if (error.message === 'No existe un usuario con el ID proporcionado') {
+      return res.status(404).json({
+        error: 'Usuario no encontrado',
+        detalles: error.message
+      });
+    }
+
+    if (error.message === 'Solo los usuarios con rol profesional pueden tener información profesional') {
+      return res.status(400).json({
+        error: 'Acción no permitida',
+        detalles: error.message
+      });
+    }
+
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+    });
+  }
+};
+
+/**
+ * @desc    Buscar profesionales con filtros
+ * @route   GET /api/usuarios/profesionales
+ * @access  Public
+ */
+const buscarProfesionales = async (req, res) => {
+  try {
+    const {
+      pagina = 1,
+      limite = 10,
+      especialidad,
+      disponible,
+      ciudad
+    } = req.query;
+
+    const filtros = {
+      especialidad,
+      disponible,
+      ciudad
+    };
+
+    const resultado = await usuariosService.buscarProfesionales(filtros, parseInt(pagina), parseInt(limite));
+
+    res.json({
+      mensaje: 'Profesionales encontrados',
+      ...resultado,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error al buscar profesionales:', error);
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+    });
+  }
+};
+
 module.exports = {
   registrarUsuario,
   obtenerUsuarios,
@@ -487,5 +629,8 @@ module.exports = {
   cambiarEstadoUsuario,
   desactivarUsuario,
   activarUsuario,
-  eliminarUsuario
+  eliminarUsuario,
+  denunciarUsuario,
+  actualizarInfoProfesional,
+  buscarProfesionales
 };

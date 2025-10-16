@@ -2,6 +2,7 @@ const Comentario = require('../models/Comentario');
 const Publicacion = require('../models/Publicacion');
 const Usuario = require('../models/Usuario');
 const Notificacion = require('../models/Notificacion');
+const Denuncia = require('../models/Denuncia');
 
 /**
  * Crear un nuevo comentario
@@ -197,6 +198,35 @@ const obtenerComentariosModerados = async (filtros = {}, pagina = 1, limite = 10
   };
 };
 
+/**
+ * Crear una denuncia de comentario
+ */
+const crearDenunciaComentario = async (datosDenuncia) => {
+  const { comentarioId, usuarioId, motivo, descripcion } = datosDenuncia;
+
+  // Verificar que el comentario existe
+  const comentario = await Comentario.findById(comentarioId);
+  if (!comentario) {
+    throw new Error('No existe un comentario con el ID proporcionado');
+  }
+
+  // Verificar que el usuario no sea el autor
+  if (comentario.usuarioId.toString() === usuarioId.toString()) {
+    throw new Error('No puedes denunciar tu propio comentario');
+  }
+
+  const denuncia = new Denuncia({
+    tipoDenuncia: 'comentario',
+    comentarioId,
+    usuarioId,
+    motivo,
+    descripcion
+  });
+
+  await denuncia.save();
+  return denuncia;
+};
+
 module.exports = {
   crearComentario,
   obtenerComentarios,
@@ -204,5 +234,6 @@ module.exports = {
   actualizarComentario,
   eliminarComentario,
   moderarComentario,
-  obtenerComentariosModerados
+  obtenerComentariosModerados,
+  crearDenunciaComentario
 };
