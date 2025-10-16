@@ -8,6 +8,9 @@ const encuestasRoutes = require('./encuestas');
 const recursosInformativosRoutes = require('./recursosInformativos');
 const publicacionesRoutes = require('./publicaciones');
 const moderacionRoutes = require('./moderacion');
+const redSocialRoutes = require('./redSocial');
+const chatRoutes = require('./chat');
+const busquedaRoutes = require('./busqueda');
 
 // Importar controladores del sistema
 const { obtenerHealthCheck, obtenerInformacionSistema, obtenerEstadisticasSistema } = require('../controllers/sistemaController');
@@ -19,6 +22,9 @@ router.use('/encuestas', encuestasRoutes);
 router.use('/recursos-informativos', recursosInformativosRoutes);
 router.use('/publicaciones', publicacionesRoutes);
 router.use('/moderacion', moderacionRoutes);
+router.use('/red-social', redSocialRoutes);
+router.use('/chat', chatRoutes);
+router.use('/buscar', busquedaRoutes);
 
 // Ruta de prueba/health check
 router.get('/health', obtenerHealthCheck);

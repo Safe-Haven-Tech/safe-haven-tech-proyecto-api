@@ -1,6 +1,7 @@
 const Comentario = require('../models/Comentario');
 const Publicacion = require('../models/Publicacion');
 const Usuario = require('../models/Usuario');
+const Notificacion = require('../models/Notificacion');
 
 /**
  * Crear un nuevo comentario
@@ -32,6 +33,17 @@ const crearComentario = async (datosComentario) => {
   // Agregar el ID del comentario al array de comentarios de la publicación
   publicacion.comentarios.push(comentario._id);
   await publicacion.save();
+
+  // Crear notificación para el autor de la publicación
+  if (publicacion.autorId.toString() !== usuarioId.toString()) {
+    await Notificacion.crearNotificacion(
+      publicacion.autorId,
+      usuarioId,
+      'respuesta',
+      `${usuario.nombreCompleto} comentó en tu publicación`,
+      `/publicacion/${publicacionId}`
+    );
+  }
 
   return comentario;
 };

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { autenticarToken, verificarRol } = require('../middlewares/auth');
+const { autenticarToken, verificarRol, autenticacionOpcional } = require('../middlewares/auth');
 const { validarPublicacion, validarActualizacionPublicacion, validarComentario, validarDenuncia } = require('../middlewares/validacion');
 const { uploadCualquierArchivo, uploadMultimedia, uploadAdjuntos } = require('../utils/multerPublicaciones');
 
@@ -26,6 +26,8 @@ const {
   eliminarPublicacion,
   darLike,
   quitarLike,
+  reaccionarAPublicacion,
+  quitarReaccionDePublicacion,
   denunciarPublicacion,
   obtenerComentarios,
   crearComentario,
@@ -33,9 +35,9 @@ const {
   obtenerPublicacionesPorUsuario,
 } = require('../controllers/publicacionesController');
 
-// Rutas públicas
-router.get('/', obtenerPublicaciones);
-router.get('/:id', obtenerPublicacionPorId);
+// Rutas públicas (con autenticación opcional para saber si el usuario es el dueño)
+router.get('/', autenticacionOpcional, obtenerPublicaciones);
+router.get('/:id', autenticacionOpcional, obtenerPublicacionPorId);
 router.get('/:id/comentarios', obtenerComentarios);
 
 // Rutas que requieren autenticación
@@ -48,10 +50,12 @@ router.put('/:id', autenticarToken, validarActualizacionPublicacion, actualizarP
 router.delete('/:id', autenticarToken, eliminarPublicacion);
 router.post('/:id/like', autenticarToken, darLike);
 router.delete('/:id/like', autenticarToken, quitarLike);
+router.post('/:id/reaccionar', autenticarToken, reaccionarAPublicacion);
+router.delete('/:id/reaccionar', autenticarToken, quitarReaccionDePublicacion);
 router.post('/:id/denunciar', autenticarToken, validarDenuncia, denunciarPublicacion);
 router.post('/:id/comentarios', autenticarToken, validarComentario, crearComentario);
 
-// Eliminar comentario (NUEVA RUTA)
+// Eliminar comentario 
 router.delete('/:id/comentarios/:comentarioId', autenticarToken, eliminarComentario);
 
 //Ruta para obtener publicaciones por usuario

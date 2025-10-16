@@ -101,6 +101,11 @@ app.use((req, res, next) => {
 const routes = require('./routes');
 app.use('/api', routes);
 
+// Configurar cron jobs para tareas programadas
+if (config.servidor.entorno === 'production') {
+  require('./scripts/cronJobs');
+}
+
 // Servir archivos estáticos (uploads)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 

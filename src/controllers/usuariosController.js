@@ -116,7 +116,7 @@ const obtenerUsuarioPublico = async (req, res) => {
     const usuario = await Usuario.findOne({ 
       nombreUsuario: { $regex: new RegExp(`^${nickname}$`, 'i') } 
     })
-      .select('nombreUsuario nombreCompleto fotoPerfil visibilidadPerfil biografia genero pronombres rol createdAt seguidores seguidos activo estado')
+      .select('nombreUsuario nombreCompleto fotoPerfil visibilidadPerfil biografia genero pronombres rol createdAt seguidores seguidos solicitudesSeguidores activo estado')
       .where('activo').equals(true)
       .where('estado').equals('activo');
 
@@ -129,6 +129,7 @@ const obtenerUsuarioPublico = async (req, res) => {
 
     // Verificar si el usuario autenticado es el dueño
     let esPropietario = false;
+    let esSeguidor = false;
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.split(' ')[1];
@@ -137,15 +138,20 @@ const obtenerUsuarioPublico = async (req, res) => {
         const { config } = require('../config');
         const decoded = jwt.verify(token, config.jwt.secret);
         esPropietario = decoded.id === usuario._id.toString();
+        
+        esSeguidor = usuario.seguidores.some(
+          id => id.toString() === decoded.id
+        );
       } catch (error) {
-        // Token inválido -> no propietario
+        
       }
     }
 
     let usuarioPublico;
 
-    if (usuario.visibilidadPerfil === 'privado' && !esPropietario) {
-      // PERFIL PRIVADO - Solo información básica
+   
+    if (usuario.visibilidadPerfil === 'privado' && !esPropietario && !esSeguidor) {
+      
       usuarioPublico = {
         _id: usuario._id,
         nombreUsuario: usuario.nombreUsuario,
@@ -158,11 +164,12 @@ const obtenerUsuarioPublico = async (req, res) => {
         biografia: '',
         seguidores: [],
         seguidos: [],
+        solicitudesSeguidores: usuario.solicitudesSeguidores || [],
         totalSeguidores: 0,
         totalSeguidos: 0
       };
     } else {
-      // PERFIL PÚBLICO o PROPIO - Información completa
+      // PERFIL PÚBLICO, PROPIO o SEGUIDOR - Información completa
       usuarioPublico = {
         _id: usuario._id,
         nombreUsuario: usuario.nombreUsuario,
@@ -175,6 +182,7 @@ const obtenerUsuarioPublico = async (req, res) => {
         visibilidadPerfil: usuario.visibilidadPerfil,
         seguidores: usuario.seguidores || [],
         seguidos: usuario.seguidos || [],
+        solicitudesSeguidores: usuario.solicitudesSeguidores || [],
         createdAt: usuario.createdAt,
         totalSeguidores: usuario.seguidores ? usuario.seguidores.length : 0,
         totalSeguidos: usuario.seguidos ? usuario.seguidos.length : 0
@@ -189,6 +197,13 @@ const obtenerUsuarioPublico = async (req, res) => {
   } catch (error) {
     console.error('❌ Error al obtener usuario público por nickname:', error);
 
+    if (error.message === 'No tienes permisos para ver este perfil') {
+      return res.status(403).json({
+        error: 'Acceso denegado',
+        detalles: error.message
+      });
+    }
+
     if (error.name === 'CastError') {
       return res.status(400).json({
         error: 'Nickname inválido',
@@ -202,6 +217,7 @@ const obtenerUsuarioPublico = async (req, res) => {
     });
   }
 };
+
 
 /**
  * @desc    Obtener usuario por ID

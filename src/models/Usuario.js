@@ -102,32 +102,30 @@ const UsuarioSchema = new Schema({
   },
   seguidores: [{
     type: Schema.Types.ObjectId,
-    ref: 'Usuario',
-    validate: {
-      validator: function(valores) {
-        return valores.length <= 10000; 
-      },
-      message: 'No se pueden tener más de 10,000 seguidores'
-    }
+    ref: 'Usuario'
   }],
   seguidos: [{
     type: Schema.Types.ObjectId,
-    ref: 'Usuario',
-    validate: {
-      validator: function(valores) {
-        return valores.length <= 5000; 
-      },
-      message: 'No se pueden seguir más de 5,000 usuarios'
-    }
+    ref: 'Usuario'
   }],
   bloqueados: [{
     type: Schema.Types.ObjectId,
-    ref: 'Usuario',
-    validate: {
-      validator: function(valores) {
-        return valores.length <= 1000; 
-      },
-      message: 'No se pueden bloquear más de 1,000 usuarios'
+    ref: 'Usuario'
+  }],
+  solicitudesSeguidores: [{
+    usuarioId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Usuario',
+      required: true
+    },
+    fechaSolicitud: {
+      type: Date,
+      default: Date.now
+    },
+    estado: {
+      type: String,
+      enum: ['pendiente', 'aceptada', 'rechazada'],
+      default: 'pendiente'
     }
   }],
   activo: {
@@ -179,6 +177,27 @@ UsuarioSchema.pre('save', function(next) {
   
   if (this.bloqueados && this.bloqueados.includes(this._id)) {
     const error = new Error('Un usuario no puede bloquearse a sí mismo');
+    return next(error);
+  }
+  
+  // Validar límites de arrays
+  if (this.seguidos && this.seguidos.length > 5000) {
+    const error = new Error('No se pueden seguir más de 5,000 usuarios');
+    return next(error);
+  }
+  
+  if (this.seguidores && this.seguidores.length > 10000) {
+    const error = new Error('No se pueden tener más de 10,000 seguidores');
+    return next(error);
+  }
+  
+  if (this.bloqueados && this.bloqueados.length > 1000) {
+    const error = new Error('No se pueden bloquear más de 1,000 usuarios');
+    return next(error);
+  }
+  
+  if (this.solicitudesSeguidores && this.solicitudesSeguidores.length > 500) {
+    const error = new Error('No se pueden tener más de 500 solicitudes pendientes');
     return next(error);
   }
   
