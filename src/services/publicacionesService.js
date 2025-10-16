@@ -494,7 +494,7 @@ const moderarPublicacion = async (id, moderadorId, motivo, accion) => {
 };
 
 /**
- * Crear una denuncia
+ * Crear una denuncia de publicación
  */
 const crearDenuncia = async (datosDenuncia) => {
   const { publicacionId, usuarioId, motivo, descripcion } = datosDenuncia;
@@ -511,6 +511,7 @@ const crearDenuncia = async (datosDenuncia) => {
   }
 
   const denuncia = new Denuncia({
+    tipoDenuncia: 'publicacion',
     publicacionId,
     usuarioId,
     motivo,
@@ -522,15 +523,16 @@ const crearDenuncia = async (datosDenuncia) => {
 };
 
 /**
- * Obtener denuncias
+ * Obtener denuncias (publicaciones, comentarios y usuarios)
  */
 const obtenerDenuncias = async (filtros = {}, pagina = 1, limite = 10) => {
-  const { estado, motivo, fechaDesde, fechaHasta } = filtros;
+  const { estado, motivo, fechaDesde, fechaHasta, tipoDenuncia } = filtros;
   
   const query = {};
   
   if (estado) query.estado = estado;
   if (motivo) query.motivo = motivo;
+  if (tipoDenuncia) query.tipoDenuncia = tipoDenuncia;
   if (fechaDesde || fechaHasta) {
     query.fecha = {};
     if (fechaDesde) query.fecha.$gte = new Date(fechaDesde);
@@ -541,6 +543,8 @@ const obtenerDenuncias = async (filtros = {}, pagina = 1, limite = 10) => {
 
   const denuncias = await Denuncia.find(query)
     .populate('publicacionId', 'contenido tipo autorId')
+    .populate('comentarioId', 'contenido autorId publicacionId')
+    .populate('usuarioDenunciadoId', 'nombreCompleto correo fotoPerfil rol')
     .populate('usuarioId', 'nombreCompleto correo')
     .populate('resueltaPor', 'nombreCompleto')
     .sort({ fecha: -1 })

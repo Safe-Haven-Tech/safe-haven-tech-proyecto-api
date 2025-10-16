@@ -8,6 +8,9 @@ const {
   cambiarEstadoUsuario, 
   desactivarUsuario, 
   activarUsuario,
+  denunciarUsuario,
+  actualizarInfoProfesional,
+  buscarProfesionales
   //obtenerUsuarioPublico
 } = require('../controllers/usuariosController');
 
@@ -23,6 +26,13 @@ const { autenticarToken, verificarRol, verificarPropietario, verificarUsuarioAct
  * @access  Public
  */
 router.post('/registro', validarRegistroUsuario, registrarUsuario);
+
+/**
+ * @route   GET /api/usuarios/profesionales
+ * @desc    Buscar profesionales con filtros
+ * @access  Public
+ */
+router.get('/profesionales', buscarProfesionales);
 
 /**
  * @route   GET /api/usuarios/public/:id
@@ -72,5 +82,19 @@ router.patch('/:id/desactivar', autenticarToken, verificarRol('administrador'), 
  * @access  Private (solo administradores)
  */
 router.patch('/:id/activar', autenticarToken, verificarRol('administrador'), validarIdMongo, activarUsuario);
+
+/**
+ * @route   POST /api/usuarios/:id/denunciar
+ * @desc    Denunciar un usuario
+ * @access  Private
+ */
+router.post('/:id/denunciar', autenticarToken, verificarUsuarioActivo, validarIdMongo, denunciarUsuario);
+
+/**
+ * @route   PUT /api/usuarios/:id/info-profesional
+ * @desc    Actualizar información profesional
+ * @access  Private (profesional propio o administrador)
+ */
+router.put('/:id/info-profesional', autenticarToken, verificarPropietario('id'), validarIdMongo, actualizarInfoProfesional);
 
 module.exports = router;

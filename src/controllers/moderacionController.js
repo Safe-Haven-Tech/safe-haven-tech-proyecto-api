@@ -113,7 +113,7 @@ const moderarComentario = async (req, res) => {
 };
 
 /**
- * @desc    Obtener denuncias
+ * @desc    Obtener denuncias (publicaciones, comentarios y usuarios)
  * @route   GET /api/moderacion/denuncias
  * @access  Private (solo administradores)
  */
@@ -125,14 +125,16 @@ const obtenerDenuncias = async (req, res) => {
       estado,
       motivo,
       fechaDesde,
-      fechaHasta
+      fechaHasta,
+      tipoDenuncia
     } = req.query;
 
     const filtros = {
       estado,
       motivo,
       fechaDesde,
-      fechaHasta
+      fechaHasta,
+      tipoDenuncia
     };
 
     const resultado = await publicacionesService.obtenerDenuncias(filtros, parseInt(pagina), parseInt(limite));

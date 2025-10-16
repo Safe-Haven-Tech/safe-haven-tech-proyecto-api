@@ -1,4 +1,5 @@
 const Usuario = require('../models/Usuario');
+const Denuncia = require('../models/Denuncia');
 const bcrypt = require('bcrypt');
 const { config } = require('../config');
 
@@ -487,7 +488,120 @@ class UsuariosService {
   
     console.log(`✅ Usuario eliminado: ${usuario.correo}`);
     return true;
-  }  
+  }
+
+  /**
+   * Actualizar información profesional de un usuario
+   * @param {String} id - ID del usuario
+   * @param {Object} infoProfesional - Información profesional a actualizar
+   * @returns {Object} Usuario actualizado
+   */
+  async actualizarInfoProfesional(id, infoProfesional) {
+    const usuario = await Usuario.findById(id);
+    
+    if (!usuario) {
+      throw new Error('No existe un usuario con el ID proporcionado');
+    }
+
+    if (usuario.rol !== 'profesional') {
+      throw new Error('Solo los usuarios con rol profesional pueden tener información profesional');
+    }
+
+    // Actualizar la información profesional
+    usuario.infoProfesional = infoProfesional;
+    await usuario.save();
+
+    // Devolver usuario sin contraseña
+    const usuarioActualizado = usuario.toObject();
+    delete usuarioActualizado.contraseña;
+
+    console.log(`✅ Información profesional actualizada para usuario: ${usuario.correo}`);
+    return usuarioActualizado;
+  }
+
+  /**
+   * Buscar profesionales con filtros
+   * @param {Object} filtros - Filtros de búsqueda
+   * @param {Number} pagina - Número de página
+   * @param {Number} limite - Límite de resultados por página
+   * @returns {Object} Lista de profesionales y paginación
+   */
+  async buscarProfesionales(filtros = {}, pagina = 1, limite = 10) {
+    const { especialidad, disponible, ciudad } = filtros;
+    
+    const query = {
+      rol: 'profesional',
+      activo: true,
+      estado: 'activo',
+      infoProfesional: { $ne: null }
+    };
+
+    // Filtrar por especialidad
+    if (especialidad) {
+      query['infoProfesional.especialidades'] = { $in: [especialidad] };
+    }
+
+    // Filtrar por disponibilidad
+    if (disponible !== undefined) {
+      query['infoProfesional.disponible'] = disponible === 'true' || disponible === true;
+    }
+
+    // Filtrar por ciudad
+    if (ciudad) {
+      query['infoProfesional.ubicacion.ciudad'] = { $regex: ciudad, $options: 'i' };
+    }
+
+    const skip = (pagina - 1) * limite;
+
+    const profesionales = await Usuario.find(query)
+      .select('-contraseña')
+      .skip(skip)
+      .limit(limite)
+      .sort({ 'infoProfesional.añosExperiencia': -1, createdAt: -1 });
+
+    const total = await Usuario.countDocuments(query);
+
+    return {
+      profesionales,
+      paginacion: {
+        pagina: parseInt(pagina),
+        limite: parseInt(limite),
+        total,
+        paginas: Math.ceil(total / limite)
+      }
+    };
+  }
+
+  /**
+   * Crear una denuncia contra un usuario
+   * @param {Object} datosDenuncia - Datos de la denuncia
+   * @returns {Object} Denuncia creada
+   */
+  async denunciarUsuario(datosDenuncia) {
+    const { usuarioDenunciadoId, usuarioId, motivo, descripcion } = datosDenuncia;
+
+    // Verificar que el usuario denunciado existe
+    const usuarioDenunciado = await Usuario.findById(usuarioDenunciadoId);
+    if (!usuarioDenunciado) {
+      throw new Error('No existe un usuario con el ID proporcionado');
+    }
+
+    // Verificar que no se está denunciando a sí mismo
+    if (usuarioDenunciadoId.toString() === usuarioId.toString()) {
+      throw new Error('No puedes denunciarte a ti mismo');
+    }
+
+    const denuncia = new Denuncia({
+      tipoDenuncia: 'usuario',
+      usuarioDenunciadoId,
+      usuarioId,
+      motivo,
+      descripcion
+    });
+
+    await denuncia.save();
+    return denuncia;
+  }
 }
 
 module.exports = new UsuariosService();
