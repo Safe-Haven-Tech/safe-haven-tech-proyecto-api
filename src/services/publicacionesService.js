@@ -517,7 +517,7 @@ const moderarPublicacion = async (id, moderadorId, motivo, accion) => {
 };
 
 /**
- * Crear una denuncia
+ * Crear una denuncia de publicación
  */
 const crearDenuncia = async (datosDenuncia) => {
   const { publicacionId, usuarioId, motivo, descripcion } = datosDenuncia;
@@ -534,6 +534,7 @@ const crearDenuncia = async (datosDenuncia) => {
   }
 
   const denuncia = new Denuncia({
+    tipoDenuncia: 'publicacion',
     publicacionId,
     usuarioId,
     motivo,
@@ -545,15 +546,16 @@ const crearDenuncia = async (datosDenuncia) => {
 };
 
 /**
- * Obtener denuncias
+ * Obtener denuncias (publicaciones, comentarios y usuarios)
  */
 const obtenerDenuncias = async (filtros = {}, pagina = 1, limite = 10) => {
-  const { estado, motivo, fechaDesde, fechaHasta } = filtros;
+  const { estado, motivo, fechaDesde, fechaHasta, tipoDenuncia } = filtros;
   
   const query = {};
   
   if (estado) query.estado = estado;
   if (motivo) query.motivo = motivo;
+  if (tipoDenuncia) query.tipoDenuncia = tipoDenuncia;
   if (fechaDesde || fechaHasta) {
     query.fecha = {};
     if (fechaDesde) query.fecha.$gte = new Date(fechaDesde);
@@ -564,6 +566,8 @@ const obtenerDenuncias = async (filtros = {}, pagina = 1, limite = 10) => {
 
   const denuncias = await Denuncia.find(query)
     .populate('publicacionId', 'contenido tipo autorId')
+    .populate('comentarioId', 'contenido autorId publicacionId')
+    .populate('usuarioDenunciadoId', 'nombreCompleto correo fotoPerfil rol')
     .populate('usuarioId', 'nombreCompleto correo')
     .populate('resueltaPor', 'nombreCompleto')
     .sort({ fecha: -1 })
@@ -614,6 +618,29 @@ async function obtenerPublicacionesPorUsuario(usuarioId, tipo, pagina = 1, limit
     .lean();
 }
 
+
+
+/**
+ * Obtener una denuncia por ID (poblada con objetivo y usuarios)
+ * @param {string} id
+ * @returns {Object} Denuncia
+ */
+const obtenerDenunciaPorId = async (id) => {
+  const denuncia = await Denuncia.findById(id)
+    .populate('publicacionId') 
+    .populate('comentarioId')
+    .populate('usuarioDenunciadoId', 'nombreCompleto nombreUsuario nickname avatar rol')
+    .populate('usuarioId', 'nombreCompleto nombreUsuario nickname avatar')
+    .populate('resueltaPor', 'nombreCompleto nombreUsuario');
+
+  if (!denuncia) {
+    throw new Error('No existe una denuncia con el ID proporcionado');
+  }
+
+  return denuncia;
+};
+
+
 module.exports = {
   crearPublicacion,
   obtenerPublicaciones,
@@ -628,5 +655,6 @@ module.exports = {
   crearDenuncia,
   obtenerPublicacionesPorUsuario,
   obtenerDenuncias,
-  resolverDenuncia
+  resolverDenuncia,
+  obtenerDenunciaPorId
 };

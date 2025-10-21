@@ -698,6 +698,68 @@ const obtenerPublicacionesPorUsuario = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Denunciar un comentario
+ * @route   POST /api/publicaciones/comentarios/:id/denunciar
+ * @access  Private
+ */
+const denunciarComentario = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { motivo, descripcion } = req.body;
+    const usuarioId = req.usuario.userId;
+
+    if (!motivo) {
+      return res.status(400).json({
+        error: 'Motivo requerido',
+        detalles: 'El motivo de la denuncia es obligatorio'
+      });
+    }
+
+    const denuncia = await comentariosService.crearDenunciaComentario({
+      comentarioId: id,
+      usuarioId,
+      motivo,
+      descripcion
+    });
+
+    res.status(201).json({
+      mensaje: 'Denuncia enviada exitosamente',
+      denuncia,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error al denunciar comentario:', error);
+
+    if (error.message === 'No existe un comentario con el ID proporcionado') {
+      return res.status(404).json({
+        error: 'Comentario no encontrado',
+        detalles: error.message
+      });
+    }
+
+    if (error.message === 'No puedes denunciar tu propio comentario') {
+      return res.status(400).json({
+        error: 'Acción no permitida',
+        detalles: error.message
+      });
+    }
+
+    if (error.message.includes('Ya has denunciado')) {
+      return res.status(400).json({
+        error: 'Denuncia duplicada',
+        detalles: error.message
+      });
+    }
+
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+    });
+  }
+};
+
 module.exports = {
   crearPublicacion,
   subirArchivosAPublicacion,
@@ -713,5 +775,6 @@ module.exports = {
   obtenerComentarios,
   denunciarPublicacion,
   eliminarComentario,
-  obtenerPublicacionesPorUsuario
+  obtenerPublicacionesPorUsuario,
+  denunciarComentario
 };

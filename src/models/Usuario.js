@@ -100,6 +100,48 @@ const UsuarioSchema = new Schema({
     required: false,
     default: ''
   },
+  // Información profesional (solo para usuarios con rol 'profesional')
+  // Este campo es completamente dinámico y puede contener cualquier estructura JSON
+  // Ejemplos de estructura sugerida:
+  // {
+  //   titulos: ['Psicólogo Clínico', 'Máster en Terapia Cognitivo-Conductual'],
+  //   especialidades: ['Ansiedad', 'Depresión', 'Terapia de pareja'],
+  //   registroProfesional: 'REG-12345',
+  //   institucionTitulo: 'Universidad de Chile',
+  //   añosExperiencia: 5,
+  //   horarioAtencion: {
+  //     lunes: [{ inicio: '09:00', fin: '13:00' }, { inicio: '15:00', fin: '18:00' }],
+  //     martes: [{ inicio: '09:00', fin: '13:00' }],
+  //     miercoles: [],
+  //     jueves: [{ inicio: '14:00', fin: '20:00' }],
+  //     viernes: [{ inicio: '09:00', fin: '15:00' }]
+  //   },
+  //   modalidadesAtencion: ['presencial', 'online', 'telefonica'],
+  //   tarifas: {
+  //     consultaIndividual: 50000,
+  //     consultaPareja: 70000,
+  //     consultaGrupal: 40000,
+  //     moneda: 'CLP'
+  //   },
+  //   idiomas: ['Español', 'Inglés'],
+  //   ubicacion: {
+  //     direccion: 'Av. Principal 123, Oficina 45',
+  //     ciudad: 'Santiago',
+  //     pais: 'Chile'
+  //   },
+  //   telefonoContacto: '+56912345678',
+  //   sitioWeb: 'https://www.ejemplo.com',
+  //   redesProfesionales: {
+  //     linkedin: 'https://linkedin.com/in/...'
+  //   },
+  //   disponible: true,
+  //   notasAdicionales: 'Atención preferencial en casos de crisis'
+  // }
+  infoProfesional: {
+    type: Schema.Types.Mixed,
+    required: false,
+    default: null
+  },
   seguidores: [{
     type: Schema.Types.ObjectId,
     ref: 'Usuario'
@@ -168,6 +210,8 @@ const UsuarioSchema = new Schema({
 UsuarioSchema.index({ rol: 1 });
 UsuarioSchema.index({ activo: 1 });
 UsuarioSchema.index({ fechaNacimiento: 1 });
+UsuarioSchema.index({ 'infoProfesional.especialidades': 1 }); // Para búsquedas de profesionales por especialidad
+UsuarioSchema.index({ 'infoProfesional.disponible': 1 }); // Para búsquedas de profesionales disponibles
 
 UsuarioSchema.pre('save', function(next) {
   if (this.seguidos && this.seguidos.includes(this._id)) {
@@ -178,6 +222,17 @@ UsuarioSchema.pre('save', function(next) {
   if (this.bloqueados && this.bloqueados.includes(this._id)) {
     const error = new Error('Un usuario no puede bloquearse a sí mismo');
     return next(error);
+  }
+  
+  // Validar que solo profesionales tengan información profesional
+  if (this.infoProfesional && this.rol !== 'profesional') {
+    const error = new Error('Solo los usuarios con rol profesional pueden tener información profesional');
+    return next(error);
+  }
+  
+  // Si cambia de rol profesional a otro rol, limpiar la información profesional
+  if (this.isModified('rol') && this.rol !== 'profesional' && this.infoProfesional) {
+    this.infoProfesional = null;
   }
   
   // Validar límites de arrays

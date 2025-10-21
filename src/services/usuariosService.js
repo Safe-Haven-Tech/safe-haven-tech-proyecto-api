@@ -1,4 +1,5 @@
 const Usuario = require('../models/Usuario');
+const Denuncia = require('../models/Denuncia');
 const bcrypt = require('bcrypt');
 const { config } = require('../config');
 
@@ -501,6 +502,131 @@ async eliminarUsuario(id, contraseña = null) {
   await anonimo.save();
   return anonimo;
 };
+
+
+
+  /**
+   * Denunciar a un usuario
+   * @param {Object} datos - { usuarioDenunciadoId, usuarioId, motivo, descripcion }
+   * @returns {Object} Denuncia creada
+   */
+ async denunciarUsuario({ usuarioDenunciadoId, usuarioId, motivo, descripcion = '' }) {
+    if (!usuarioDenunciadoId) {
+      throw new Error('Usuario denunciado requerido');
+    }
+    if (!usuarioId) {
+      throw new Error('ID del autor de la denuncia requerido');
+    }
+    if (!motivo) {
+      throw new Error('Motivo de denuncia requerido');
+    }
+
+    // Evitar auto-denuncia
+    if (String(usuarioDenunciadoId) === String(usuarioId)) {
+      throw new Error('No puedes denunciarte a ti mismo');
+    }
+
+    // Verificar existencia del usuario denunciado
+    const usuario = await Usuario.findById(usuarioDenunciadoId);
+    if (!usuario) {
+      throw new Error('Usuario objetivo no encontrado');
+    }
+
+    
+    const nuevaDenuncia = new Denuncia({
+      tipoDenuncia: 'usuario',
+      usuarioDenunciadoId: usuarioDenunciadoId, 
+      usuarioId: usuarioId,
+      motivo,
+      descripcion,
+      fecha: new Date()
+    });
+
+    // (opcional) debug log - eliminar en producción
+    console.log('Creando denuncia (usuario):', {
+      usuarioDenunciadoId,
+      usuarioId,
+      motivo,
+      descripcion
+    });
+
+    const denunciaGuardada = await nuevaDenuncia.save();
+
+    return denunciaGuardada;
+  }
+
+    /**
+   * Buscar profesionales con filtros (público)
+   * @param {Object} filtros - { especialidad, ciudad, disponible, idiomas, modalidad, q, ordenar }
+   * @param {number} pagina
+   * @param {number} limite
+   * @returns {Object} { usuarios: [], paginacion: { total, pagina, limite, totalPages } }
+   */
+  async buscarProfesionales(filtros = {}, pagina = 1, limite = 10, ordenar = '') {
+    try {
+      const query = { rol: 'profesional', activo: true };
+
+      // Texto de búsqueda (nombre, nickname, especialidades, títulos)
+      if (filtros.q) {
+        const regex = new RegExp(filtros.q, 'i');
+        query.$or = [
+          { nombreCompleto: regex },
+          { nombreUsuario: regex },
+          { 'infoProfesional.especialidades': regex },
+          { 'infoProfesional.titulos': regex },
+        ];
+      }
+
+      if (filtros.especialidad) {
+        query['infoProfesional.especialidades'] = { $in: [new RegExp(filtros.especialidad, 'i')] };
+      }
+
+      if (filtros.ciudad) {
+        query['infoProfesional.ubicacion.ciudad'] = new RegExp(filtros.ciudad, 'i');
+      }
+
+      if (typeof filtros.disponible !== 'undefined') {
+        query['infoProfesional.disponible'] = filtros.disponible === 'true' || filtros.disponible === true;
+      }
+
+      if (filtros.idiomas) {
+        const arr = Array.isArray(filtros.idiomas) ? filtros.idiomas : String(filtros.idiomas).split(',').map(s => s.trim()).filter(Boolean);
+        if (arr.length) query['infoProfesional.idiomas'] = { $in: arr.map(i => new RegExp(i, 'i')) };
+      }
+
+      if (filtros.modalidad) {
+        query['infoProfesional.modalidadesAtencion'] = { $in: [new RegExp(filtros.modalidad, 'i')] };
+      }
+
+      // Orden
+      let sort = { nombreCompleto: 1 };
+      if (ordenar === 'reciente') sort = { createdAt: -1 };
+      else if (ordenar === 'mejor_valorados') sort = { 'infoProfesional.ratingPromedio': -1 };
+
+      const skip = Math.max(0, (Number(pagina) - 1)) * Number(limite);
+      const limit = Number(limite);
+
+      const [usuariosRaw, total] = await Promise.all([
+        Usuario.find(query).sort(sort).skip(skip).limit(limit).lean(),
+        Usuario.countDocuments(query),
+      ]);
+
+      // Aplicar restricciones de visualización (quita campos sensibles)
+      const usuarios = usuariosRaw.map(u => this.aplicarRestriccionesVisualizacion(u, null, false));
+
+      const totalPages = Math.ceil(total / limit) || 1;
+
+      return {
+        usuarios,
+        paginacion: { total, pagina: Number(pagina), limite: limit, totalPages },
+      };
+    } catch (error) {
+      // Propagar con contexto
+      throw new Error(`Error en usuariosService.buscarProfesionales: ${error.message}`);
+    }
+  }
 }
+
+
 
 module.exports = new UsuariosService();

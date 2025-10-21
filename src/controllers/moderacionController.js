@@ -113,7 +113,7 @@ const moderarComentario = async (req, res) => {
 };
 
 /**
- * @desc    Obtener denuncias
+ * @desc    Obtener denuncias (publicaciones, comentarios y usuarios)
  * @route   GET /api/moderacion/denuncias
  * @access  Private (solo administradores)
  */
@@ -125,14 +125,16 @@ const obtenerDenuncias = async (req, res) => {
       estado,
       motivo,
       fechaDesde,
-      fechaHasta
+      fechaHasta,
+      tipoDenuncia
     } = req.query;
 
     const filtros = {
       estado,
       motivo,
       fechaDesde,
-      fechaHasta
+      fechaHasta,
+      tipoDenuncia
     };
 
     const resultado = await publicacionesService.obtenerDenuncias(filtros, parseInt(pagina), parseInt(limite));
@@ -243,10 +245,44 @@ const obtenerComentariosModerados = async (req, res) => {
   }
 };
 
+
+
+/**
+ * @desc    Obtener detalle de una denuncia
+ * @route   GET /api/moderacion/denuncias/:id
+ * @access  Private (solo administradores)
+ */
+const getDenunciaById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const denuncia = await publicacionesService.obtenerDenunciaPorId(id);
+
+    res.json({
+      denuncia,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Error al obtener denuncia por id:', error);
+
+    if (error.message === 'No existe una denuncia con el ID proporcionado') {
+      return res.status(404).json({
+        error: 'Denuncia no encontrada',
+        detalles: error.message
+      });
+    }
+
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+    });
+  }
+};
+
 module.exports = {
   moderarPublicacion,
   moderarComentario,
   obtenerDenuncias,
   resolverDenuncia,
-  obtenerComentariosModerados
+  obtenerComentariosModerados,
+  getDenunciaById
 };

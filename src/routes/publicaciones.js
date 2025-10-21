@@ -29,6 +29,7 @@ const {
   reaccionarAPublicacion,
   quitarReaccionDePublicacion,
   denunciarPublicacion,
+  denunciarComentario,
   obtenerComentarios,
   crearComentario,
   eliminarComentario,
@@ -54,6 +55,7 @@ router.post('/:id/reaccionar', autenticarToken, reaccionarAPublicacion);
 router.delete('/:id/reaccionar', autenticarToken, quitarReaccionDePublicacion);
 router.post('/:id/denunciar', autenticarToken, validarDenuncia, denunciarPublicacion);
 router.post('/:id/comentarios', autenticarToken, validarComentario, crearComentario);
+router.post('/comentarios/:id/denunciar', autenticarToken, validarDenuncia, denunciarComentario);
 
 // Eliminar comentario 
 router.delete('/:id/comentarios/:comentarioId', autenticarToken, eliminarComentario);
