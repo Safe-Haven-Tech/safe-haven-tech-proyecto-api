@@ -11,6 +11,7 @@ const moderacionRoutes = require('./moderacion');
 const redSocialRoutes = require('./redSocial');
 const chatRoutes = require('./chat');
 const busquedaRoutes = require('./busqueda');
+const postulacionesRoutes = require('./postulaciones');
 
 // Importar controladores del sistema
 const { obtenerHealthCheck, obtenerInformacionSistema, obtenerEstadisticasSistema } = require('../controllers/sistemaController');
@@ -25,6 +26,7 @@ router.use('/moderacion', moderacionRoutes);
 router.use('/red-social', redSocialRoutes);
 router.use('/chat', chatRoutes);
 router.use('/buscar', busquedaRoutes);
+router.use('/postulaciones', postulacionesRoutes);
 
 // Ruta de prueba/health check
 router.get('/health', obtenerHealthCheck);
