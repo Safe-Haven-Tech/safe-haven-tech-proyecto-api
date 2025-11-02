@@ -3,7 +3,8 @@ const { config } = require('../config');
 const { subirImagenCloudinary, eliminarImagenCloudinary } = require('../utils/cloudinary');
 const Usuario = require('../models/Usuario');
 const bcrypt = require('bcrypt');
-const authService = require('../services/authService'); // ✅ Añadir importación
+const authService = require('../services/authService'); 
+const mongoose = require('mongoose');
 
 /**
  * @desc    Registrar un nuevo usuario
@@ -711,6 +712,93 @@ const verificarNickname = async (req, res) => {
   }
 };
 
+
+const obtenerConexiones = async (req, res) => {
+  try {
+    const userId = req.usuario?.userId;
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
+
+    // validar ObjectId
+    if (!mongoose.Types.ObjectId.isValid(String(userId))) {
+      return res.status(400).json({ error: 'ID inválido', detalles: 'El formato del ID de usuario no es válido' });
+    }
+
+    const type = (req.query.type || 'both').toLowerCase();
+    const q = (req.query.query || '').trim();
+    const limit = Math.min(parseInt(req.query.limit || '50', 10), 200);
+    const includeInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
+
+    const yo = await Usuario.findById(userId).select('seguidos seguidores bloqueados').lean();
+    if (!yo) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    // normalizar arrays (acepta ObjectId, string o subdocument con _id)
+    const normalize = (arr) => (Array.isArray(arr) ? arr.map(item => {
+      if (!item && item !== 0) return null;
+      if (typeof item === 'string' || typeof item === 'number') return String(item);
+      if (item._id) return String(item._id);
+      if (item.id) return String(item.id);
+      return null;
+    }).filter(Boolean) : []);
+
+    const seguidos = normalize(yo.seguidos);
+    const seguidores = normalize(yo.seguidores);
+    const bloqueados = normalize(yo.bloqueados);
+
+    let ids = [];
+    if (type === 'following') ids = seguidos;
+    else if (type === 'followers') ids = seguidores;
+    else ids = Array.from(new Set([...seguidos, ...seguidores]));
+
+    const filteredIds = ids.filter(id => id && id !== String(userId) && !bloqueados.includes(id));
+
+    console.log('[obtenerConexiones] userId:', userId);
+    console.log('[obtenerConexiones] seguidos:', seguidos.length, 'seguidores:', seguidores.length, 'bloqueados:', bloqueados.length);
+    console.log('[obtenerConexiones] idsRaw:', ids.length, 'filteredIds:', filteredIds.length, filteredIds.slice(0,10));
+
+    if (!filteredIds.length) {
+      return res.json({
+        users: [],
+        debug: { seguidos, seguidores, bloqueados, filteredIds }
+      });
+    }
+
+    // construir criterio; permitir bypass de filtro 'activo' para depuración
+    const criterio = { _id: { $in: filteredIds } };
+    if (q) {
+      criterio.$or = [
+        { nombreUsuario: { $regex: q, $options: 'i' } },
+        { nombreCompleto: { $regex: q, $options: 'i' } }
+      ];
+    }
+    if (!includeInactive) {
+      criterio.activo = true;
+    }
+
+    const users = await Usuario.find(criterio)
+      .select('nombreUsuario nombreCompleto fotoPerfil activo')
+      .limit(limit)
+      .lean();
+
+    // Si no se encontró nada y aplicamos filtro activo, devolver también los candidatos sin filtro para depuración
+    if (!users.length && !includeInactive) {
+      const usersAll = await Usuario.find({ _id: { $in: filteredIds } })
+        .select('nombreUsuario nombreCompleto fotoPerfil activo')
+        .limit(limit)
+        .lean();
+
+      return res.json({
+        users: [],
+        debug: { filteredIds, matchedCountWithActivo: usersAll.length, matchedSamples: usersAll.slice(0,10) }
+      });
+    }
+
+    return res.json({ users });
+  } catch (err) {
+    console.error('obtenerConexiones error:', err);
+    return res.status(500).json({ error: 'Error obteniendo conexiones' });
+  }
+};
+
 module.exports = {
   registrarUsuario,
   obtenerUsuarios,
@@ -725,5 +813,6 @@ module.exports = {
   actualizarInfoProfesional,
   buscarProfesionales,
   obtenerUsuarioPublico,
-  verificarNickname
+  verificarNickname,
+  obtenerConexiones
 };

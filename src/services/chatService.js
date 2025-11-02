@@ -2,6 +2,7 @@ const Chat = require('../models/Chat');
 const MensajeChat = require('../models/MensajeChat');
 const Usuario = require('../models/Usuario');
 const Notificacion = require('../models/Notificacion');
+const multerChat = require('../utils/multerChat');
 
 /**
  * Servicio para manejar funcionalidades de chat
@@ -348,6 +349,41 @@ const limpiarMensajesExpirados = async () => {
   }
 };
 
+const subirArchivosAMensaje = async (chatId, mensajeId, files = [], usuarioId = null) => {
+  try {
+    if (!Array.isArray(files) || files.length === 0) {
+      throw new Error('No se recibieron archivos');
+    }
+
+    // Validar existencia del mensaje y pertenencia al chat
+    const mensaje = await MensajeChat.findById(mensajeId);
+    if (!mensaje) throw new Error('Mensaje no encontrado o no pertenece al chat');
+    if (String(mensaje.chatId) !== String(chatId)) throw new Error('Mensaje no encontrado o no pertenece al chat');
+
+    // Mapear archivos (multer file objects) a la estructura de almacenamiento en el mensaje
+    const nuevosAdjuntos = files.map(f => ({
+      nombre: f.originalname || f.filename,
+      filename: f.filename || null,
+      url: multerChat.obtenerUrlArchivo(f.filename || ''), // utilitario para construir URL
+      mimetype: f.mimetype || '',
+      tamaño: f.size || 0,
+      almacenadoEn: f.path || ''
+    }));
+
+    // Añadir adjuntos y persistir
+    mensaje.archivosAdjuntos = Array.isArray(mensaje.archivosAdjuntos)
+      ? mensaje.archivosAdjuntos.concat(nuevosAdjuntos)
+      : nuevosAdjuntos;
+
+    await mensaje.save();
+    await mensaje.populate('emisorId', 'nombreCompleto fotoPerfil nombreUsuario');
+
+    return mensaje;
+  } catch (err) {
+    throw err;
+  }
+};
+
 module.exports = {
   crearChat,
   obtenerChats,
@@ -357,5 +393,6 @@ module.exports = {
   marcarMensajesComoLeidos,
   eliminarMensaje,
   eliminarChat,
-  limpiarMensajesExpirados
+  limpiarMensajesExpirados,
+  subirArchivosAMensaje
 };

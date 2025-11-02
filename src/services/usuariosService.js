@@ -230,12 +230,15 @@ class UsuariosService {
       fotoPerfil: usuario.fotoPerfil,
       visibilidadPerfil: usuario.visibilidadPerfil,
       anonimo: usuario.anonimo,
-      fechaRegistro: usuario.fechaRegistro
+      fechaRegistro: usuario.fechaRegistro,
+      // añadir campos útiles para listado público de profesionales
+      biografia: usuario.biografia || '',
+      infoProfesional: usuario.infoProfesional || null,
+      ubicacion: usuario.ubicacion || (usuario.infoProfesional && usuario.infoProfesional.ubicacion) || null
     };
 
     // Si es el propio usuario o tiene permisos especiales, incluir datos adicionales
     if (incluirDatosSensibles || (usuarioActualId && usuario._id.toString() === usuarioActualId.toString())) {
-      usuarioFiltrado.biografia = usuario.biografia;
       usuarioFiltrado.pronombres = usuario.pronombres;
       usuarioFiltrado.genero = usuario.genero;
       usuarioFiltrado.seguidores = usuario.seguidores;
@@ -606,8 +609,14 @@ async eliminarUsuario(id, contraseña = null) {
       const skip = Math.max(0, (Number(pagina) - 1)) * Number(limite);
       const limit = Number(limite);
 
+      // Proyección explícita: incluir campos públicos relevantes y excluir contraseña
       const [usuariosRaw, total] = await Promise.all([
-        Usuario.find(query).sort(sort).skip(skip).limit(limit).lean(),
+        Usuario.find(query)
+          .select('nombreCompleto nombreUsuario fotoPerfil biografia visibilidadPerfil anonimo infoProfesional ubicacion seguidores seguidos createdAt')
+          .sort(sort)
+          .skip(skip)
+          .limit(limit)
+          .lean(),
         Usuario.countDocuments(query),
       ]);
 

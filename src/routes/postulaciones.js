@@ -1,16 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const {
-  crearPostulacion,
-  subirDocumentos,
-  obtenerPostulaciones,
-  obtenerPostulacionPorId,
-  aprobarPostulacion,
-  rechazarPostulacion,
-  eliminarPostulacion,
-  obtenerMisPostulaciones,
-  obtenerEstadisticas
-} = require('../controllers/postulacionesController');
+
+// controlador central (incluye funciones admin: listPostulaciones, getPostulacionById, decidirPostulacion)
+const controller = require('../controllers/postulacionesController');
 
 const { autenticarToken, verificarRol, verificarUsuarioActivo } = require('../middlewares/auth');
 const { validarIdMongo } = require('../middlewares/validacion');
@@ -29,16 +21,20 @@ const handleMulterError = (error, req, res, next) => {
 };
 
 /**
+ * RUTAS PÚBLICAS / USUARIO
+ */
+
+/**
  * @route   POST /api/postulaciones/profesional
  * @desc    Crear una nueva postulación a profesional (sin archivos)
- * @access  Private (solo usuarios con rol 'usuario')
+ * @access  Private (solo usuarios con rol 'usuario' o admin)
  */
 router.post(
   '/profesional',
   autenticarToken,
   verificarUsuarioActivo,
-  verificarRol('usuario'),
-  crearPostulacion
+  verificarRol(['usuario', 'administrador']),
+  controller.crearPostulacion
 );
 
 /**
@@ -51,9 +47,9 @@ router.post(
   autenticarToken,
   verificarUsuarioActivo,
   validarIdMongo,
-  uploadPostulacion.array('documentos', 5), // Máximo 5 archivos
+  uploadPostulacion.array('documentos', 5),
   handleMulterError,
-  subirDocumentos
+  controller.subirDocumentos
 );
 
 /**
@@ -65,7 +61,7 @@ router.get(
   '/profesional/mis-postulaciones',
   autenticarToken,
   verificarUsuarioActivo,
-  obtenerMisPostulaciones
+  controller.obtenerMisPostulaciones
 );
 
 /**
@@ -77,7 +73,7 @@ router.get(
   '/profesional/estadisticas',
   autenticarToken,
   verificarRol('administrador'),
-  obtenerEstadisticas
+  controller.obtenerEstadisticas
 );
 
 /**
@@ -89,7 +85,7 @@ router.get(
   '/profesional',
   autenticarToken,
   verificarRol('administrador'),
-  obtenerPostulaciones
+  controller.obtenerPostulaciones
 );
 
 /**
@@ -102,7 +98,7 @@ router.get(
   autenticarToken,
   verificarUsuarioActivo,
   validarIdMongo,
-  obtenerPostulacionPorId
+  controller.obtenerPostulacionPorId
 );
 
 /**
@@ -115,7 +111,7 @@ router.patch(
   autenticarToken,
   verificarRol('administrador'),
   validarIdMongo,
-  aprobarPostulacion
+  controller.aprobarPostulacion
 );
 
 /**
@@ -128,7 +124,7 @@ router.patch(
   autenticarToken,
   verificarRol('administrador'),
   validarIdMongo,
-  rechazarPostulacion
+  controller.rechazarPostulacion
 );
 
 /**
@@ -141,7 +137,35 @@ router.delete(
   autenticarToken,
   verificarUsuarioActivo,
   validarIdMongo,
-  eliminarPostulacion
+  controller.eliminarPostulacion
+);
+
+/**
+ * RUTAS ADMIN (mount bajo /api/postulaciones/admin)
+ * Protegidas: autenticarToken + verificarRol('administrador')
+ * Nota: se reutiliza el mismo controlador que ya expone las funciones admin.
+ */
+router.get(
+  '/admin',
+  autenticarToken,
+  verificarRol('administrador'),
+  controller.listPostulaciones
+);
+
+router.get(
+  '/admin/:id',
+  autenticarToken,
+  verificarRol('administrador'),
+  validarIdMongo,
+  controller.getPostulacionById
+);
+
+router.patch(
+  '/admin/:id/decidir',
+  autenticarToken,
+  verificarRol('administrador'),
+  validarIdMongo,
+  controller.decidirPostulacion
 );
 
 module.exports = router;

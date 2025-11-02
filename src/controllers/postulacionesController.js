@@ -1,5 +1,7 @@
 const postulacionesService = require('../services/postulacionesService');
 const { config } = require('../config');
+const Postulacion = require('../models/PostulacionProfesional');
+const Usuario = require('../models/Usuario');
 
 /**
  * @desc    Crear una nueva postulación a profesional (sin archivos)
@@ -9,17 +11,23 @@ const { config } = require('../config');
 const crearPostulacion = async (req, res) => {
   try {
     const usuarioId = req.usuario.userId;
-    const { motivacion, experiencia, especialidad } = req.body;
 
-    // Validar campos requeridos
-    if (!motivacion || motivacion.trim().length === 0) {
-      return res.status(400).json({
-        error: 'Campos requeridos faltantes',
-        detalles: 'La motivación es obligatoria'
-      });
-    }
+    // aceptar el payload completo
+    const {
+      nombreCompleto,
+      correo,
+      telefono,
+      ubicacion,
+      biografia,
+      infoProfesional,
+      motivacion,
+      experiencia,
+      especialidad,
+      etiquetas
+    } = req.body;
 
-    if (motivacion.length < 50) {
+    // Validaciones mínimas
+    if (!motivacion || String(motivacion).trim().length < 50) {
       return res.status(400).json({
         error: 'Validación fallida',
         detalles: 'La motivación debe tener al menos 50 caracteres'
@@ -27,9 +35,16 @@ const crearPostulacion = async (req, res) => {
     }
 
     const postulacion = await postulacionesService.crearPostulacion(usuarioId, {
+      nombreCompleto,
+      correo,
+      telefono,
+      ubicacion,
+      biografia,
+      infoProfesional,
       motivacion,
       experiencia,
-      especialidad
+      especialidad,
+      etiquetas
     });
 
     res.status(201).json({
@@ -44,13 +59,6 @@ const crearPostulacion = async (req, res) => {
     if (error.message.includes('Ya tienes una postulación pendiente')) {
       return res.status(409).json({
         error: 'Postulación duplicada',
-        detalles: error.message
-      });
-    }
-
-    if (error.message.includes('Solo los usuarios con rol')) {
-      return res.status(403).json({
-        error: 'Acción no permitida',
         detalles: error.message
       });
     }
@@ -447,6 +455,117 @@ const obtenerEstadisticas = async (req, res) => {
   }
 };
 
+/**
+ * ADMIN CONTROLS (usados por rutas /admin dentro de postulaciones)
+ * - listPostulaciones
+ * - getPostulacionById
+ * - decidirPostulacion
+ */
+
+/**
+ * GET /api/postulaciones/admin
+ * Query: estado, q, page, limit
+ */
+const listPostulaciones = async (req, res) => {
+  try {
+    const { estado, q, page = 1, limit = 15 } = req.query;
+    const pg = Math.max(1, Number(page) || 1);
+    const lim = Math.max(1, Math.min(100, Number(limit) || 15));
+
+    const filter = {};
+    if (estado) filter.estado = estado;
+
+    if (q && q.trim()) {
+      const regex = new RegExp(q.trim(), 'i');
+      const usuarios = await Usuario.find({
+        $or: [{ nombreCompleto: regex }, { correo: regex }]
+      }).select('_id');
+      const userIds = usuarios.map(u => u._id);
+
+      filter.$or = [
+        { usuarioId: { $in: userIds } },
+        { motivacion: regex },
+        { especialidad: regex }
+      ];
+    }
+
+    const total = await Postulacion.countDocuments(filter);
+    const postulaciones = await Postulacion.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((pg - 1) * lim)
+      .limit(lim)
+      .populate('usuarioId', 'nombreCompleto correo fotoPerfil');
+
+    res.json({
+      data: postulaciones,
+      meta: {
+        page: pg,
+        limit: lim,
+        total,
+        pages: Math.ceil(total / lim) || 1
+      }
+    });
+  } catch (err) {
+    console.error('Error listPostulaciones:', err);
+    res.status(500).json({ error: 'Error listando postulaciones', detalles: err.message });
+  }
+};
+
+/**
+ * GET /api/postulaciones/admin/:id
+ */
+const getPostulacionById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const postulacion = await Postulacion.findById(id).populate('usuarioId', '-contraseña');
+    if (!postulacion) return res.status(404).json({ error: 'Postulación no encontrada' });
+    res.json({ data: postulacion });
+  } catch (err) {
+    console.error('Error getPostulacionById:', err);
+    res.status(500).json({ error: 'Error obteniendo la postulación', detalles: err.message });
+  }
+};
+
+/**
+ * PATCH /api/postulaciones/admin/:id/decidir
+ * body: { accion: 'aceptar'|'denegar', motivo?: string }
+ */
+const decidirPostulacion = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { accion, motivo } = req.body;
+    const adminId = req.usuario.userId;
+
+    const postulacion = await Postulacion.findById(id);
+    if (!postulacion) return res.status(404).json({ error: 'Postulación no encontrada' });
+    if (postulacion.estado !== 'pendiente') {
+      return res.status(400).json({ error: 'La postulación ya fue revisada' });
+    }
+
+    if (accion === 'aceptar') {
+      // reutilizar el servicio de aprobación
+      const resultado = await postulacionesService.aprobarPostulacion(id, adminId, motivo || '');
+      return res.json({ message: 'Postulación aprobada', data: resultado });
+    }
+
+    if (accion === 'denegar' || accion === 'rechazar') {
+      // si requiere motivo, validar aquí (motivo opcional según tu elección)
+      if (!motivo || String(motivo).trim().length === 0) {
+        // permitir vacío si el flujo lo admite; aquí lo permitimos pero se almacena vacío
+        // si quieres forzar motivo, descomenta el siguiente bloque:
+        // return res.status(400).json({ error: 'Motivo requerido para denegar' });
+      }
+      const resultado = await postulacionesService.rechazarPostulacion(id, adminId, motivo || '');
+      return res.json({ message: 'Postulación rechazada', data: resultado });
+    }
+
+    return res.status(400).json({ error: 'Acción inválida. Usa "aceptar" o "denegar".' });
+  } catch (err) {
+    console.error('Error decidirPostulacion:', err);
+    res.status(500).json({ error: 'Error actualizando estado de la postulación', detalles: err.message });
+  }
+};
+
 module.exports = {
   crearPostulacion,
   subirDocumentos,
@@ -456,5 +575,9 @@ module.exports = {
   rechazarPostulacion,
   eliminarPostulacion,
   obtenerMisPostulaciones,
-  obtenerEstadisticas
+  obtenerEstadisticas,
+  // admin exports
+  listPostulaciones,
+  getPostulacionById,
+  decidirPostulacion
 };
