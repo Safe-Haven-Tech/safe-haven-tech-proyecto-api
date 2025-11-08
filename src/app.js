@@ -9,13 +9,14 @@ const { config } = require('./config');
 
 const app = express();
 
+// Helmet CSP: permitir imágenes desde el backend y orígenes externos si están configurados
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
+      imgSrc: ["'self'", "data:", "https:", config.cors?.origen || 'http://localhost:3000'],
     },
   },
   hsts: {
@@ -25,32 +26,52 @@ app.use(helmet({
   }
 }));
 
+// CORS global (ajusta origen si quieres restringir)
 app.use(cors({
-  origin: config.cors.origen,
-  credentials: config.cors.credenciales,
+  origin: config.cors?.origen || '*',
+  credentials: config.cors?.credenciales || false,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: '*'
 }));
 
-const limiter = rateLimit({
-  windowMs: config.seguridad.rateLimitWindow,
-  max: config.seguridad.rateLimitMax,
-  message: {
-    error: 'Demasiadas solicitudes desde esta IP, intenta de nuevo más tarde.',
-    retryAfter: Math.ceil(config.seguridad.rateLimitWindow / 1000)
-  },
+// Rate limiters para /api
+const windowMs = config?.seguridad?.rateLimitWindow ?? 15 * 60 * 1000;
+const unauthMax = config?.seguridad?.rateLimitMax ?? 120;
+const authMax = config?.seguridad?.rateLimitMaxAuth ?? (unauthMax * 10);
+
+const rateLimitMessage = {
+  error: 'Demasiadas solicitudes desde esta IP, intenta de nuevo más tarde.',
+  retryAfter: Math.ceil(windowMs / 1000)
+};
+
+const unauthenticatedLimiter = rateLimit({
+  windowMs,
+  max: unauthMax,
+  message: rateLimitMessage,
   standardHeaders: true,
-  legacyHeaders: false,
+  legacyHeaders: false
 });
 
-app.use('/api/', limiter);
+const authenticatedLimiter = rateLimit({
+  windowMs,
+  max: authMax,
+  message: rateLimitMessage,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Aplicar limiter según Authorization header (solo para /api)
+app.use('/api', (req, res, next) => {
+  const hasAuth = !!(req.headers && req.headers.authorization);
+  if (hasAuth) return authenticatedLimiter(req, res, next);
+  return unauthenticatedLimiter(req, res, next);
+});
 
 const formatoLog = config.servidor.entorno === 'production' ? 'combined' : 'dev';
 app.use(morgan(formatoLog, {
   skip: (req, res) => {
-    // Filtrar rutas de frontend y archivos estáticos que no queremos ver
-    return req.path.startsWith('/_next/') || 
-           req.path.startsWith('/favicon.ico') || 
+    return req.path.startsWith('/_next/') ||
+           req.path.startsWith('/favicon.ico') ||
            req.path.startsWith('/.well-known/') ||
            req.path === '/' ||
            req.path.includes('webpack-hmr') ||
@@ -59,53 +80,63 @@ app.use(morgan(formatoLog, {
   }
 }));
 
-app.use(express.json({ 
+app.use(express.json({
   limit: '10mb',
   verify: (req, res, buf) => {
-    try {
-      JSON.parse(buf);
-    } catch (e) {
-      res.status(400).json({ error: 'JSON inválido' });
-      throw new Error('JSON inválido');
+    if (buf.length === 0) return;
+    try { JSON.parse(buf); } catch (e) {
+      const error = new Error('JSON inválido');
+      error.statusCode = 400;
+      error.expose = true;
+      throw error;
     }
   }
 }));
 
-app.use(express.urlencoded({ 
-  extended: true, 
-  limit: '10mb' 
+app.use(express.urlencoded({
+  extended: true,
+  limit: '10mb'
 }));
 
-// Filtrar rutas de webpack HMR antes de las rutas principales
+// Filtrar rutas HMR/webpack no deseadas
 app.use((req, res, next) => {
-  // Bloquear completamente las rutas de webpack HMR
-  if (req.path.includes('webpack-hmr') || 
-      req.path.includes('__webpack_hmr') || 
+  if (req.path.includes('webpack-hmr') ||
+      req.path.includes('__webpack_hmr') ||
       req.path.includes('hot-reload') ||
       req.path.includes('hmr') ||
       req.path.includes('hot') ||
       req.path.includes('reload')) {
-    return res.status(404).end(); // Respuesta silenciosa
+    return res.status(404).end();
   }
   next();
 });
 
-// Importar y usar rutas
+// Servir /uploads con cabeceras que permitan carga desde el front (CORS/CORP)
+app.use(
+  '/uploads',
+  (req, res, next) => {
+    const origen = config.cors?.origen || '*';
+    res.setHeader('Access-Control-Allow-Origin', origen);
+    // permitir que recursos estáticos sean usados desde otros orígenes
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+  },
+  express.static(path.join(__dirname, 'uploads'))
+);
+
+// Importar y usar rutas API (después de servir estáticos públicos)
 const routes = require('./routes');
 app.use('/api', routes);
 
-// Configurar cron jobs para tareas programadas
+// Configurar cron jobs para producción si aplica
 if (config.servidor.entorno === 'production') {
-  require('./scripts/cronJobs');
+  try { require('./scripts/cronJobs'); } catch (e) { /* noop */ }
 }
 
-// Servir archivos estáticos (uploads)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
+// Logging adicional por petición (filtrado)
 app.use((req, res, next) => {
-  // Filtrar logs de frontend, archivos estáticos y rutas no relevantes
-  const shouldSkip = req.path.startsWith('/_next/') || 
-                     req.path.startsWith('/favicon.ico') || 
+  const shouldSkip = req.path.startsWith('/_next/') ||
+                     req.path.startsWith('/favicon.ico') ||
                      req.path.startsWith('/.well-known/') ||
                      req.path === '/' ||
                      req.path.includes('webpack-hmr') ||
@@ -114,7 +145,7 @@ app.use((req, res, next) => {
                      req.path.includes('hmr') ||
                      req.path.includes('hot') ||
                      req.path.includes('reload');
-  
+
   if (!shouldSkip) {
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] ${req.method} ${req.path} - ${req.ip}`);
@@ -122,41 +153,34 @@ app.use((req, res, next) => {
   next();
 });
 
+// Manejo de errores centralizado
 app.use((error, req, res, next) => {
   console.error('Error no manejado:', error);
-  
+
   if (error.name === 'ValidationError') {
-    return res.status(400).json({
-      error: 'Error de validación',
-      detalles: error.message
-    });
+    return res.status(400).json({ error: 'Error de validación', detalles: error.message });
   }
-  
+
   if (error.name === 'CastError') {
-    return res.status(400).json({
-      error: 'ID inválido',
-      detalles: 'El formato del ID proporcionado no es válido'
-    });
+    return res.status(400).json({ error: 'ID inválido', detalles: 'El formato del ID proporcionado no es válido' });
   }
-  
+
   if (error.code === 11000) {
-    return res.status(409).json({
-      error: 'Conflicto',
-      detalles: 'El recurso ya existe'
-    });
+    return res.status(409).json({ error: 'Conflicto', detalles: 'El recurso ya existe' });
   }
-  
+
   const statusCode = error.statusCode || 500;
-  const message = config.servidor.entorno === 'production' 
-    ? 'Error interno del servidor' 
+  const message = config.servidor.entorno === 'production'
+    ? 'Error interno del servidor'
     : error.message;
-  
+
   res.status(statusCode).json({
     error: message,
     ...(config.servidor.entorno === 'development' && { stack: error.stack })
   });
 });
 
+// Ruta catch-all 404 JSON
 app.use('*', (req, res) => {
   res.status(404).json({
     error: 'Ruta no encontrada',
@@ -167,14 +191,12 @@ app.use('*', (req, res) => {
   });
 });
 
-app.getServerInfo = () => {
-  return {
-    entorno: config.servidor.entorno,
-    puerto: config.servidor.puerto,
-    host: config.servidor.host,
-    timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version || '1.0.0'
-  };
-};
+app.getServerInfo = () => ({
+  entorno: config.servidor.entorno,
+  puerto: config.servidor.puerto,
+  host: config.servidor.host,
+  timestamp: new Date().toISOString(),
+  version: process.env.npm_package_version || '1.0.0'
+});
 
 module.exports = app;

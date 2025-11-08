@@ -297,6 +297,43 @@ const obtenerUsuariosBloqueados = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Cancelar solicitud de seguimiento enviada
+ * @route   DELETE /api/red-social/solicitud/:usuarioId
+ * @access  Private
+ */
+const cancelarSolicitudSeguimiento = async (req, res) => {
+  try {
+    const usuarioASeguirId = req.params.usuarioId; // El usuario al que le enviaste la solicitud
+    const usuarioActualId = req.usuario.userId;    // El que cancela la solicitud
+
+    const Usuario = require('../models/Usuario');
+    const usuarioASeguir = await Usuario.findById(usuarioASeguirId);
+
+    if (!usuarioASeguir) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    // Filtra las solicitudes, quitando la del usuario actual y solo si está pendiente
+    const solicitudesAntes = usuarioASeguir.solicitudesSeguidores.length;
+    usuarioASeguir.solicitudesSeguidores = usuarioASeguir.solicitudesSeguidores.filter(
+      s => !(s.usuarioId.toString() === usuarioActualId.toString() && s.estado === 'pendiente')
+    );
+    const solicitudesDespues = usuarioASeguir.solicitudesSeguidores.length;
+
+    if (solicitudesAntes === solicitudesDespues) {
+      return res.status(404).json({ error: 'No hay solicitud pendiente para cancelar' });
+    }
+
+    await usuarioASeguir.save();
+
+    res.json({ mensaje: 'Solicitud de seguimiento cancelada' });
+  } catch (error) {
+    console.error('❌ Error al cancelar solicitud de seguimiento:', error);
+    res.status(500).json({ error: 'Error interno del servidor', detalles: error.message });
+  }
+};
+
 // ==================== NOTIFICACIONES ====================
 
 /**
@@ -700,6 +737,7 @@ module.exports = {
   obtenerSolicitudesSeguidores,
   aceptarSolicitudSeguimiento,
   rechazarSolicitudSeguimiento,
+  cancelarSolicitudSeguimiento,
   
   // Bloqueos
   bloquearUsuario,

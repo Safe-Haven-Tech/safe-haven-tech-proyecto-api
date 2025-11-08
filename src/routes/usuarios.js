@@ -10,14 +10,15 @@ const {
   activarUsuario,
   denunciarUsuario,
   actualizarInfoProfesional,
-  buscarProfesionales
-  //obtenerUsuarioPublico
+  buscarProfesionales,
+  obtenerUsuarioPublico,
+  eliminarUsuario,
+  verificarNickname,
+  obtenerConexiones
 } = require('../controllers/usuariosController');
 
-// CORREGIR - usa middlewares en plural
+const upload = require('../utils/multer');
 const { validarRegistroUsuario, validarActualizacionUsuario, validarIdMongo } = require('../middlewares/validacion');
-
-// CORREGIR - también auth.js está en middlewares
 const { autenticarToken, verificarRol, verificarPropietario, verificarUsuarioActivo } = require('../middlewares/auth');
 
 /**
@@ -35,11 +36,30 @@ router.post('/registro', validarRegistroUsuario, registrarUsuario);
 router.get('/profesionales', buscarProfesionales);
 
 /**
- * @route   GET /api/usuarios/public/:id
- * @desc    Obtener información pública de un usuario
+ * @route   GET /api/usuarios/verificar-nickname/:nickname
+ * @desc    Verificar disponibilidad de nickname (AHORA PÚBLICO)
  * @access  Public
  */
-//router.get('/public/:id', validarIdMongo, obtenerUsuarioPublico);
+router.get('/verificar-nickname/:nickname', verificarNickname);
+
+/**
+ * @route   GET /api/usuarios/public/:nickname
+ * @desc    Obtener información pública de un usuario por nickname
+ * @access  Public
+ */
+router.get('/public/:nickname', obtenerUsuarioPublico);
+
+/**
+ * Nota: rutas estáticas específicas (ej. /connections) deben definirse
+ * antes de las rutas dinámicas con ':id' para evitar conflictos.
+ */
+
+/** 
+ * @route   GET /api/usuarios/connections
+ * @desc    Obtener conexiones de un usuario (seguidos / seguidores / ambos)
+ * @access  Private (usuario propio)
+ */
+router.get('/connections', autenticarToken, obtenerConexiones);
 
 /**
  * @route   GET /api/usuarios
@@ -52,49 +72,58 @@ router.get('/', autenticarToken, verificarRol('administrador'), obtenerUsuarios)
  * @route   GET /api/usuarios/:id
  * @desc    Obtener usuario por ID (información completa)
  * @access  Private (usuario propio o administrador)
+ *
+ * validarIdMongo se aplica antes para evitar CastError cuando el :id no es un ObjectId válido
  */
-router.get('/:id', autenticarToken, verificarPropietario('id'), obtenerUsuarioPorId);
+router.get('/:id', validarIdMongo, autenticarToken, verificarPropietario('id'), obtenerUsuarioPorId);
 
 /**
  * @route   PUT /api/usuarios/:id
  * @desc    Actualizar usuario
  * @access  Private (usuario propio o administrador)
  */
-router.put('/:id', autenticarToken, verificarPropietario('id'), validarIdMongo, validarActualizacionUsuario, actualizarUsuario);
+router.put('/:id', validarIdMongo, autenticarToken, verificarPropietario('id'), upload.single('fotoPerfil'), validarActualizacionUsuario, actualizarUsuario);
 
 /**
  * @route   PATCH /api/usuarios/:id/estado
  * @desc    Cambiar estado del usuario
  * @access  Private (solo administradores)
  */
-router.patch('/:id/estado', autenticarToken, verificarRol('administrador'), validarIdMongo, cambiarEstadoUsuario);
+router.patch('/:id/estado', validarIdMongo, autenticarToken, verificarRol('administrador'), cambiarEstadoUsuario);
 
 /**
  * @route   PATCH /api/usuarios/:id/desactivar
  * @desc    Desactivar usuario
  * @access  Private (solo administradores)
  */
-router.patch('/:id/desactivar', autenticarToken, verificarRol('administrador'), validarIdMongo, desactivarUsuario);
+router.patch('/:id/desactivar', validarIdMongo, autenticarToken, verificarRol('administrador'), desactivarUsuario);
 
 /**
  * @route   PATCH /api/usuarios/:id/activar
  * @desc    Activar usuario
  * @access  Private (solo administradores)
  */
-router.patch('/:id/activar', autenticarToken, verificarRol('administrador'), validarIdMongo, activarUsuario);
+router.patch('/:id/activar', validarIdMongo, autenticarToken, verificarRol('administrador'), activarUsuario);
 
 /**
  * @route   POST /api/usuarios/:id/denunciar
  * @desc    Denunciar un usuario
  * @access  Private
  */
-router.post('/:id/denunciar', autenticarToken, verificarUsuarioActivo, validarIdMongo, denunciarUsuario);
+router.post('/:id/denunciar', validarIdMongo, autenticarToken, verificarUsuarioActivo, denunciarUsuario);
 
 /**
  * @route   PUT /api/usuarios/:id/info-profesional
  * @desc    Actualizar información profesional
  * @access  Private (profesional propio o administrador)
  */
-router.put('/:id/info-profesional', autenticarToken, verificarPropietario('id'), validarIdMongo, actualizarInfoProfesional);
+router.put('/:id/info-profesional', validarIdMongo, autenticarToken, verificarPropietario('id'), actualizarInfoProfesional);
+
+/**
+ * @route   DELETE /api/usuarios/:id
+ * @desc    Eliminar usuario
+ * @access  Private (usuario propio o administrador)
+ */
+router.delete('/:id', validarIdMongo, autenticarToken, verificarPropietario('id'), eliminarUsuario);
 
 module.exports = router;

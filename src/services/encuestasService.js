@@ -46,12 +46,15 @@ const crearEncuesta = async (datosEncuesta) => {
  */
 const obtenerEncuestas = async (filtros = {}) => {
   try {
-    const query = { activa: true };
-    
-    if (filtros.categoria) {
-      query.categoria = filtros.categoria;
+    // Convierte el filtro activa a booleano si viene como string
+    if (typeof filtros.activa === 'string') {
+      if (filtros.activa === 'true') filtros.activa = true;
+      else if (filtros.activa === 'false') filtros.activa = false;
     }
-    
+
+    const query = {};
+    if (typeof filtros.activa === 'boolean') query.activa = filtros.activa;
+    if (filtros.categoria) query.categoria = filtros.categoria;
     if (filtros.busqueda) {
       query.$or = [
         { titulo: { $regex: filtros.busqueda, $options: 'i' } },
@@ -59,11 +62,27 @@ const obtenerEncuestas = async (filtros = {}) => {
       ];
     }
 
+    // Paginación
+    const pagina = parseInt(filtros.pagina) || 1;
+    const limite = parseInt(filtros.limite) || 10;
+    const skip = (pagina - 1) * limite;
+
     const encuestas = await Encuesta.find(query)
       .populate('creadoPor', 'nombreCompleto nombreUsuario')
-      .sort({ fechaCreacion: -1 });
+      .sort({ fechaCreacion: -1 })
+      .skip(skip)
+      .limit(limite);
 
-    return encuestas;
+    const total = await Encuesta.countDocuments(query);
+
+    return {
+      encuestas,
+      paginacion: {
+        paginaActual: pagina,
+        totalPaginas: Math.ceil(total / limite),
+        total
+      }
+    };
   } catch (error) {
     throw error;
   }
@@ -285,28 +304,60 @@ const guardarRespuestaParcial = async (respuestaId, respuestas, usuarioId) => {
       throw new Error('No se puede modificar una encuesta ya completada');
     }
 
-    // Validar que las respuestas correspondan a las preguntas
-    const encuesta = await obtenerEncuestaPorId(respuesta.encuestaId);
-    const preguntasObligatorias = encuesta.preguntas.filter(p => p.obligatoria);
-    
-    for (const pregunta of preguntasObligatorias) {
-      const respuestaEncontrada = respuestas.find(r => r.preguntaOrden === pregunta.orden);
-      if (!respuestaEncontrada || !respuestaEncontrada.respuesta) {
-        throw new Error(`La pregunta "${pregunta.enunciado}" es obligatoria`);
-      }
-    }
-
-    // Actualizar respuestas
+    // PARA GUARDADO PARCIAL: No validar campos obligatorios
+    // Solo actualizar las respuestas que se envían
     respuesta.respuestas = respuestas;
     respuesta.fechaModificacion = new Date();
     
-    await respuesta.save();
+    // Guardar sin validación de campos requeridos
+    await respuesta.save({ validateBeforeSave: false });
 
     return respuesta;
   } catch (error) {
     throw error;
   }
 };
+
+/**
+ * @desc    Finalizar encuesta con validación completa
+ * @param   {string} respuestaId - ID de la respuesta
+ * @param   {string} usuarioId - ID del usuario
+ * @returns {Object} Respuesta validada
+ */
+const finalizarRespuestaConValidacion = async (respuestaId, usuarioId) => {
+  try {
+    const respuesta = await RespuestaEncuesta.findById(respuestaId);
+    
+    if (!respuesta) {
+      throw new Error('Respuesta de encuesta no encontrada');
+    }
+
+    if (respuesta.usuarioId.toString() !== usuarioId) {
+      throw new Error('No tienes permisos para finalizar esta respuesta');
+    }
+
+    // Obtener la encuesta original para validar
+    const encuesta = await obtenerEncuestaPorId(respuesta.encuestaId);
+    const preguntasObligatorias = encuesta.preguntas.filter(p => p.obligatoria);
+    
+    // Validar que todas las preguntas obligatorias estén respondidas
+    for (const pregunta of preguntasObligatorias) {
+      const respuestaEncontrada = respuesta.respuestas.find(r => r.preguntaOrden === pregunta.orden);
+      
+      if (!respuestaEncontrada || 
+          !respuestaEncontrada.respuesta || 
+          respuestaEncontrada.respuesta === '' ||
+          (Array.isArray(respuestaEncontrada.respuesta) && respuestaEncontrada.respuesta.length === 0)) {
+        throw new Error(`La pregunta "${pregunta.enunciado}" es obligatoria`);
+      }
+    }
+
+    return respuesta;
+  } catch (error) {
+    throw error;
+  }
+};
+
 
 /**
  * @desc    Completar encuesta
@@ -317,33 +368,18 @@ const guardarRespuestaParcial = async (respuestaId, respuestas, usuarioId) => {
  */
 const completarEncuesta = async (respuestaId, respuestas, usuarioId) => {
   try {
-    const respuesta = await RespuestaEncuesta.findById(respuestaId);
+    // Primero guardar las respuestas sin validación
+    await guardarRespuestaParcial(respuestaId, respuestas, usuarioId);
     
-    if (!respuesta) {
-      throw new Error('Respuesta de encuesta no encontrada');
-    }
-
-    if (respuesta.usuarioId.toString() !== usuarioId) {
-      throw new Error('No tienes permisos para completar esta respuesta');
-    }
+    // Luego validar que esté completa
+    const respuesta = await finalizarRespuestaConValidacion(respuestaId, usuarioId);
 
     if (respuesta.estado === 'completada') {
       throw new Error('La encuesta ya está completada');
     }
 
-    // Validar respuestas obligatorias
+    // Si pasa la validación, marcar como completada
     const encuesta = await obtenerEncuestaPorId(respuesta.encuestaId);
-    const preguntasObligatorias = encuesta.preguntas.filter(p => p.obligatoria);
-    
-    for (const pregunta of preguntasObligatorias) {
-      const respuestaEncontrada = respuestas.find(r => r.preguntaOrden === pregunta.orden);
-      if (!respuestaEncontrada || !respuestaEncontrada.respuesta) {
-        throw new Error(`La pregunta "${pregunta.enunciado}" es obligatoria`);
-      }
-    }
-
-    // Actualizar respuestas y marcar como completada
-    respuesta.respuestas = respuestas;
     respuesta.marcarCompletada();
 
     // Generar PDF con los resultados
@@ -465,25 +501,27 @@ const obtenerEstadisticasEncuesta = async (encuestaId, usuarioId) => {
  * @returns {string} URL del PDF subido
  */
 const subirPDFCloudinary = async (pdfBuffer, nombreArchivo) => {
+  const tmpDir = path.join(__dirname, '../tmp');
+  const tempPath = path.join(tmpDir, nombreArchivo);
+
   try {
-    // Verificar si Cloudinary está configurado
-    if (!configurarCloudinary()) {
-      throw new Error('Cloudinary no está configurado correctamente');
+    // Crear la carpeta tmp si no existe
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+      console.log(`📁 Carpeta tmp creada en: ${tmpDir}`);
     }
 
-    // Verificar conexión
-    const conexionOk = await verificarConexion();
-    if (!conexionOk) {
-      throw new Error('No se puede conectar con Cloudinary');
-    }
-
-    // Generar nombre único para el archivo
-    const tempPath = path.join(__dirname, `../tmp/${nombreArchivo}`);
+    // Guardar temporalmente el PDF
     fs.writeFileSync(tempPath, pdfBuffer);
+    console.log(`📄 PDF temporal creado: ${tempPath}`);
+
+    // Verificar configuración y conexión con Cloudinary
+    if (!configurarCloudinary()) throw new Error('Cloudinary no está configurado correctamente');
+    if (!(await verificarConexion())) throw new Error('No se puede conectar con Cloudinary');
 
     const fecha = new Date();
-    const formato = fecha.toLocaleDateString("es-CL").replace(/\//g, "-"); 
-    
+    const formato = fecha.toLocaleDateString("es-CL").replace(/\//g, "-");
+
     // Subir a Cloudinary
     const resultado = await cloudinary.uploader.upload(tempPath, {
       resource_type: 'auto',
@@ -493,22 +531,57 @@ const subirPDFCloudinary = async (pdfBuffer, nombreArchivo) => {
     });
 
     console.log(`✅ PDF subido a Cloudinary: ${resultado.secure_url}`);
-    console.log(`   📁 Carpeta: safehaven/encuestas`);
-    console.log(`   🏷️ Public ID: ${resultado.public_id}`);
-    console.log(`   📊 Tamaño: ${(resultado.bytes / 1024).toFixed(2)} KB`);
 
-    fs.unlinkSync(tempPath);
-    
     return resultado.secure_url;
-    
+
   } catch (error) {
     console.error('❌ Error al subir PDF a Cloudinary:', error);
-    
-    // Si falla Cloudinary, generar URL local como fallback
-    console.warn('⚠️ Generando URL local como fallback');
     return `http://localhost:3000/api/encuestas/pdf/${nombreArchivo}`;
+
+  } finally {
+    // Intentar eliminar archivo temporal siempre, si existe
+    if (fs.existsSync(tempPath)) {
+      try {
+        fs.unlinkSync(tempPath);
+        console.log(`🗑️ Archivo temporal eliminado: ${tempPath}`);
+      } catch (unlinkError) {
+        console.error('❌ No se pudo eliminar el archivo temporal:', unlinkError);
+      }
+    }
   }
 };
+
+/**
+ * @desc    Generar PDF sin guardar en base de datos (usuarios no autenticados)
+ * @param   {Object} respuestaTemporal - Objeto temporal con respuestas
+ * @param   {Object} encuesta - Encuesta original
+ * @returns {Buffer} Buffer del PDF generado
+ */
+const generarPDFSinAuth = async (respuestaTemporal, encuesta) => {
+  try {
+    // Usar la misma función de generación de PDF pero sin guardarlo
+    const pdfBuffer = await generarPDFEncuesta(respuestaTemporal, encuesta);
+    
+    console.log(`✅ PDF generado para usuario no autenticado - Encuesta: "${encuesta.titulo}"`);
+    console.log(`   📊 Total respuestas: ${respuestaTemporal.respuestas.length}`);
+    console.log(`   📄 Tamaño PDF: ${(pdfBuffer.length / 1024).toFixed(2)} KB`);
+    
+    return pdfBuffer;
+  } catch (error) {
+    console.error('❌ Error al generar PDF sin auth:', error);
+    throw error;
+  }
+};
+
+/**
+ * @desc    Eliminar una encuesta
+ * @param   {string} encuestaId - ID de la encuesta
+ * @returns {Object} Resultado de la eliminación
+ */
+const eliminarEncuesta = async (encuestaId) => {
+  return await Encuesta.findByIdAndDelete(encuestaId);
+};
+
 
 module.exports = {
   crearEncuesta,
@@ -519,7 +592,10 @@ module.exports = {
   activarEncuesta,
   iniciarEncuesta,
   guardarRespuestaParcial,
+  finalizarRespuestaConValidacion,
   completarEncuesta,
   obtenerRespuestasUsuario,
-  obtenerEstadisticasEncuesta
+  obtenerEstadisticasEncuesta,
+  generarPDFSinAuth,
+  eliminarEncuesta,
 };

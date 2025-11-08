@@ -2,6 +2,15 @@ const mongoose = require('mongoose');
 
 const { Schema, model } = mongoose;
 
+const ArchivoAdjuntoSchema = new Schema({
+  nombre: { type: String },
+  filename: { type: String },
+  url: { type: String },
+  mimetype: { type: String },
+  tamano: { type: Number },        // usar 'tamano' (sin tilde)
+  almacenadoEn: { type: String }
+}, { _id: false });
+
 const MensajeChatSchema = new Schema({
   chatId: {
     type: Schema.Types.ObjectId,
@@ -32,7 +41,6 @@ const MensajeChatSchema = new Schema({
   leidoEn: {
     type: Date
   },
-  // Campo para mensajes temporales
   esTemporal: {
     type: Boolean,
     default: false
@@ -40,12 +48,11 @@ const MensajeChatSchema = new Schema({
   expiraEn: {
     type: Date
   },
-  // Campo para archivos adjuntos
-  archivosAdjuntos: [{
-    type: String,
-    trim: true,
-    maxlength: [1024, 'La URL del archivo adjunto no puede exceder los 1024 caracteres']
-  }]
+  // ahora almacenamos objetos con metadatos
+  archivosAdjuntos: {
+    type: [ArchivoAdjuntoSchema],
+    default: []
+  }
 }, {
   timestamps: true
 });
@@ -56,44 +63,33 @@ MensajeChatSchema.index({ emisorId: 1 });
 MensajeChatSchema.index({ leido: 1 });
 MensajeChatSchema.index({ expiraEn: 1 });
 
-// Middleware para validar mensajes temporales
 MensajeChatSchema.pre('save', function(next) {
   if (this.esTemporal) {
     if (!this.expiraEn) {
       const error = new Error('Los mensajes temporales deben tener una fecha de expiración');
       return next(error);
     }
-    
-    // Validar que la expiración no sea más de 1 día
-    const unDia = 24 * 60 * 60 * 1000; // 24 horas en milisegundos
+    const unDia = 24 * 60 * 60 * 1000;
     if (this.expiraEn.getTime() - this.fecha.getTime() > unDia) {
       const error = new Error('Los mensajes temporales no pueden durar más de 1 día');
       return next(error);
     }
   }
-  
   next();
 });
 
-// Método para marcar como leído
 MensajeChatSchema.methods.marcarComoLeido = function() {
   this.leido = true;
   this.leidoEn = new Date();
   return this.save();
 };
 
-// Método para verificar si el mensaje ha expirado
 MensajeChatSchema.methods.haExpirado = function() {
-  if (!this.esTemporal || !this.expiraEn) {
-    return false;
-  }
-  
+  if (!this.esTemporal || !this.expiraEn) return false;
   return new Date() > this.expiraEn;
 };
 
-// Método para verificar si el usuario puede ver el mensaje
 MensajeChatSchema.methods.puedeVer = function(usuarioId) {
-  // Verificar que el usuario participa en el chat
   return this.chatId.participaUsuario(usuarioId);
 };
 

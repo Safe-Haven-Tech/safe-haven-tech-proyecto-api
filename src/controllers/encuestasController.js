@@ -1,5 +1,88 @@
 const encuestasService = require('../services/encuestasService');
+const { generarPDFEncuesta } = require('../utils/pdfGenerator');
+const RespuestaEncuesta = require('../models/RespuestaEncuesta');
 const { config } = require('../config');
+
+// Función auxiliar para calcular puntajes
+const calcularPuntajeRespuesta = (pregunta, respuesta) => {
+  if (!pregunta || respuesta === undefined || respuesta === null) {
+    return 0;
+  }
+
+  // Si las opciones son objetos con valor y puntaje
+  if (pregunta.tipo === 'opciones' && Array.isArray(pregunta.opciones)) {
+    // Verificar si las opciones son objetos
+    if (pregunta.opciones.length > 0 && typeof pregunta.opciones[0] === 'object') {
+      const opcion = pregunta.opciones.find(o => o.valor === respuesta);
+      return opcion?.puntaje || 0;
+    }
+    
+    // Si las opciones son strings simples, asignar puntaje por índice
+    if (pregunta.opciones.length > 0 && typeof pregunta.opciones[0] === 'string') {
+      const indice = pregunta.opciones.findIndex(opcion => opcion === respuesta);
+      if (indice === -1) return 0;
+      
+      // Asignar puntajes según el tipo de pregunta
+      if (pregunta.tipo === 'escala' || pregunta.categoria === 'Autoestima y autoconcepto') {
+        // Para escalas de violencia/riesgo: "Nunca"=0, "Raramente"=1, "A veces"=2, "Frecuentemente"=3, "Siempre"=4
+        return indice;
+      }
+      
+      // Para otros tipos, mantener el índice como puntaje
+      return indice;
+    }
+  }
+
+  // Para escalas donde las opciones son strings simples
+  if (pregunta.tipo === 'escala' && Array.isArray(pregunta.opciones)) {
+    if (typeof pregunta.opciones[0] === 'string') {
+      const indice = pregunta.opciones.findIndex(opcion => opcion === respuesta);
+      return indice >= 0 ? indice : 0;
+    }
+  }
+
+  // Para preguntas de texto libre u otros tipos
+  return 0;
+};
+
+// Función auxiliar para calcular rangos dinámicos basados en el número de preguntas
+const calcularRangosDinamicos = (totalPreguntas, maxPuntajePorPregunta = 4) => {
+  const puntajeMaximo = totalPreguntas * maxPuntajePorPregunta;
+  
+  // Calcular rangos como porcentajes del puntaje máximo
+  const rangoMedio = Math.ceil(puntajeMaximo * 0.25);    // 25% del máximo
+  const rangoAlto = Math.ceil(puntajeMaximo * 0.50);     // 50% del máximo  
+  const rangoCritico = Math.ceil(puntajeMaximo * 0.75);  // 75% del máximo
+  
+  return {
+    medio: rangoMedio,
+    alto: rangoAlto,
+    critico: rangoCritico,
+    maximo: puntajeMaximo
+  };
+};
+
+// Función auxiliar para determinar nivel de riesgo
+const determinarNivelRiesgo = (puntaje, encuesta) => {
+  // Si la encuesta tiene rangos definidos, usarlos
+  if (encuesta.riesgoCritico || encuesta.riesgoAlto || encuesta.riesgoMedio) {
+    if (encuesta.riesgoCritico && puntaje >= encuesta.riesgoCritico) return 'crítico';
+    if (encuesta.riesgoAlto && puntaje >= encuesta.riesgoAlto) return 'alto';
+    if (encuesta.riesgoMedio && puntaje >= encuesta.riesgoMedio) return 'medio';
+    return 'bajo';
+  }
+  
+  // Si no hay rangos definidos, calcular dinámicamente
+  const totalPreguntas = encuesta.preguntas ? encuesta.preguntas.length : 0;
+  if (totalPreguntas === 0) return 'bajo';
+  
+  const rangos = calcularRangosDinamicos(totalPreguntas);
+  
+  if (puntaje >= rangos.critico) return 'crítico';
+  if (puntaje >= rangos.alto) return 'alto';
+  if (puntaje >= rangos.medio) return 'medio';
+  return 'bajo';
+};
 
 /**
  * @desc    Crear una nueva encuesta (solo administradores)
@@ -85,18 +168,19 @@ const crearEncuesta = async (req, res) => {
  */
 const obtenerEncuestas = async (req, res) => {
   try {
-    const { categoria, busqueda } = req.query;
+    const { categoria, busqueda, activa } = req.query; 
     const filtros = {};
-    
     if (categoria) filtros.categoria = categoria;
     if (busqueda) filtros.busqueda = busqueda;
+    if (activa !== undefined) filtros.activa = activa; 
 
-    const encuestas = await encuestasService.obtenerEncuestas(filtros);
+    const resultado = await encuestasService.obtenerEncuestas(filtros);
 
     res.status(200).json({
       mensaje: 'Encuestas obtenidas exitosamente',
-      total: encuestas.length,
-      encuestas,
+      total: resultado.encuestas.length,
+      encuestas: resultado.encuestas,
+      paginacion: resultado.paginacion,
       timestamp: new Date().toISOString()
     });
 
@@ -109,7 +193,6 @@ const obtenerEncuestas = async (req, res) => {
     });
   }
 };
-
 /**
  * @desc    Obtener una encuesta por ID
  * @route   GET /api/encuestas/:id
@@ -250,6 +333,22 @@ const desactivarEncuesta = async (req, res) => {
   }
 };
 
+
+/**
+ * @desc    Eliminar una encuesta (solo administradores)
+ * @route   DELETE /api/encuestas/:id
+ * @access  Private (solo administradores)
+ */
+const eliminarEncuesta = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await encuestasService.eliminarEncuesta(id);
+    res.status(200).json({ mensaje: 'Encuesta eliminada correctamente' });
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al eliminar la encuesta', error: error.message });
+  }
+};
+
 /**
  * @desc    Activar una encuesta (solo administradores)
  * @route   PUT /api/encuestas/:id/activar
@@ -299,191 +398,128 @@ const activarEncuesta = async (req, res) => {
   }
 };
 
-/**
- * @desc    Iniciar una encuesta para un usuario
- * @route   POST /api/encuestas/:id/iniciar
- * @access  Private
- */
-const iniciarEncuesta = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const usuarioId = req.usuario.userId;
-
-    const {nuevaRespuesta, esNueva} = await encuestasService.iniciarEncuesta(id, usuarioId);
-
-    if(esNueva){
-      res.status(200).json({
-        mensaje: 'Encuesta iniciada exitosamente',
-          respuesta: nuevaRespuesta,
-          timestamp: new Date().toISOString()
-        });
-    }else{
-      res.status(400).json({
-        mensaje: 'Encuesta ya iniciada',
-        respuesta: nuevaRespuesta,
-        timestamp: new Date().toISOString()
-      });
-    }
-
-  } catch (error) {
-    console.error('❌ Error al iniciar encuesta:', error);
-
-    if (error.message === 'Encuesta no encontrada') {
-      return res.status(404).json({
-        error: 'Encuesta no encontrada',
-        detalles: error.message
-      });
-    }
-
-    if (error.message === 'La encuesta no está activa') {
-      return res.status(400).json({
-        error: 'Encuesta inactiva',
-        detalles: error.message
-      });
-    }
-
-    if (error.message === 'Ya has completado esta encuesta') {
-      return res.status(400).json({
-        error: 'Encuesta ya completada',
-        detalles: error.message
-      });
-    }
-
-    res.status(500).json({
-      error: 'Error interno del servidor',
-      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
-    });
-  }
-};
 
 /**
- * @desc    Guardar respuesta parcial de encuesta
- * @route   PUT /api/encuestas/respuestas/:respuestaId/parcial
- * @access  Private
- */
-const guardarRespuestaParcial = async (req, res) => {
-  try {
-    const { respuestaId } = req.params;
-    const { respuestas } = req.body;
-    const usuarioId = req.usuario.userId;
-
-    if (!respuestas || !Array.isArray(respuestas)) {
-      return res.status(400).json({
-        error: 'Campo requerido faltante',
-        detalles: 'respuestas debe ser un array válido'
-      });
-    }
-
-    const respuesta = await encuestasService.guardarRespuestaParcial(respuestaId, respuestas, usuarioId);
-
-    res.status(200).json({
-      mensaje: 'Respuesta parcial guardada exitosamente',
-      respuesta,
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('❌ Error al guardar respuesta parcial:', error);
-
-    if (error.message === 'Respuesta de encuesta no encontrada') {
-      return res.status(404).json({
-        error: 'Respuesta no encontrada',
-        detalles: error.message
-      });
-    }
-
-    if (error.message.includes('No tienes permisos')) {
-      return res.status(403).json({
-        error: 'Acceso denegado',
-        detalles: error.message
-      });
-    }
-
-    if (error.message.includes('No se puede modificar')) {
-      return res.status(400).json({
-        error: 'Operación no permitida',
-        detalles: error.message
-      });
-    }
-
-    if (error.message.includes('es obligatoria')) {
-      return res.status(400).json({
-        error: 'Campos obligatorios faltantes',
-        detalles: error.message
-      });
-    }
-
-    res.status(500).json({
-      error: 'Error interno del servidor',
-      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
-    });
-  }
-};
-
-/**
- * @desc    Completar encuesta
- * @route   PUT /api/encuestas/respuestas/:respuestaId/completar
- * @access  Private
+ * @desc Completar encuesta (usuarios auth y no auth)
+ * @route POST /api/encuestas/:id/completar
+ * @access Public / Private
  */
 const completarEncuesta = async (req, res) => {
   try {
-    const { respuestaId } = req.params;
+    const { id } = req.params; // encuestaId
     const { respuestas } = req.body;
-    const usuarioId = req.usuario.userId;
+    const usuarioId = req.usuario?.userId || null;
 
-    if (!respuestas || !Array.isArray(respuestas)) {
-      return res.status(400).json({
-        error: 'Campo requerido faltante',
-        detalles: 'respuestas debe ser un array válido'
+    // Validación de input
+    if (!respuestas || !Array.isArray(respuestas) || respuestas.length === 0) {
+      return res.status(400).json({ 
+        error: 'Campo requerido faltante', 
+        detalles: 'respuestas debe ser un array válido y no vacío' 
       });
     }
 
-    const respuesta = await encuestasService.completarEncuesta(respuestaId, respuestas, usuarioId);
+    // Obtener encuesta
+    const encuesta = await encuestasService.obtenerEncuestaPorId(id);
+    if (!encuesta) {
+      return res.status(404).json({ 
+        error: 'Encuesta no encontrada', 
+        detalles: `No se encontró la encuesta con ID ${id}` 
+      });
+    }
 
-    res.status(200).json({
-      mensaje: 'Encuesta completada exitosamente',
-      respuesta,
-      pdfUrl: respuesta.resultadoPDF,
-      timestamp: new Date().toISOString()
+    if (!encuesta.preguntas || encuesta.preguntas.length === 0) {
+      return res.status(400).json({
+        error: 'Encuesta inválida',
+        detalles: 'La encuesta no tiene preguntas definidas'
+      });
+    }
+
+    // Completar respuestas con tipo, enunciado y puntaje
+    const respuestasCompletas = respuestas.map(r => {
+      const pregunta = encuesta.preguntas.find(p => p.orden === r.preguntaOrden);
+      if (!pregunta) {
+        throw new Error(`Pregunta con orden ${r.preguntaOrden} no encontrada`);
+      }
+
+      const puntaje = calcularPuntajeRespuesta(pregunta, r.respuesta);
+
+      return { 
+        ...r, 
+        preguntaTipo: pregunta.tipo, 
+        preguntaEnunciado: pregunta.enunciado, 
+        puntaje 
+      };
     });
+
+    // Validar preguntas obligatorias
+    const preguntasObligatorias = encuesta.preguntas.filter(p => p.obligatoria);
+    for (const pregunta of preguntasObligatorias) {
+      const r = respuestasCompletas.find(x => x.preguntaOrden === pregunta.orden);
+      if (!r || r.respuesta === undefined || r.respuesta === '' || (Array.isArray(r.respuesta) && r.respuesta.length === 0)) {
+        return res.status(400).json({
+          error: 'Campos obligatorios faltantes',
+          detalles: `La pregunta "${pregunta.enunciado}" es obligatoria`
+        });
+      }
+    }
+
+    // Calcular puntaje total y nivel de riesgo
+    const puntajeTotal = respuestasCompletas.reduce((acc, r) => acc + (r.puntaje || 0), 0);
+
+    // Determinar nivel de riesgo usando rangos dinámicos o predefinidos
+    const nivelRiesgo = determinarNivelRiesgo(puntajeTotal, encuesta);
+
+    // Generar recomendaciones
+    const recomendaciones = encuestasService.generarRecomendaciones
+      ? encuestasService.generarRecomendaciones(puntajeTotal, nivelRiesgo, encuesta)
+      : [];
+
+    const respuestaFinal = { 
+      respuestas: respuestasCompletas, 
+      fechaCompletado: new Date(), 
+      puntajeTotal, 
+      nivelRiesgo, 
+      recomendaciones 
+    };
+
+    // Guardar en BD solo si el usuario está autenticado
+    if (usuarioId) {
+      const nuevaRespuesta = new RespuestaEncuesta({ 
+        usuarioId, 
+        encuestaId: id, 
+        ...respuestaFinal, 
+        estado: 'completada' 
+      });
+      await nuevaRespuesta.save({ validateBeforeSave: false });
+    }
+
+    // Generar PDF
+    if (!encuesta.titulo) {
+      return res.status(500).json({
+        error: 'Error interno',
+        detalles: 'Encuesta inválida para generar PDF'
+      });
+    }
+
+    const pdfBuffer = await generarPDFEncuesta(respuestaFinal, encuesta);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename=Encuesta_${id}.pdf`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.end(pdfBuffer);
 
   } catch (error) {
-    console.error('❌ Error al completar encuesta:', error);
-
-    if (error.message === 'Respuesta de encuesta no encontrada') {
-      return res.status(404).json({
-        error: 'Respuesta no encontrada',
-        detalles: error.message
+    console.error('❌ Error al completar encuesta unificada:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Error interno del servidor', 
+        detalles: error.message 
       });
     }
-
-    if (error.message.includes('No tienes permisos')) {
-      return res.status(403).json({
-        error: 'Acceso denegado',
-        detalles: error.message
-      });
-    }
-
-    if (error.message.includes('ya está completada')) {
-      return res.status(400).json({
-        error: 'Encuesta ya completada',
-        detalles: error.message
-      });
-    }
-
-    if (error.message.includes('es obligatoria')) {
-      return res.status(400).json({
-        error: 'Campos obligatorios faltantes',
-        detalles: error.message
-      });
-    }
-
-    res.status(500).json({
-      error: 'Error interno del servidor',
-      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
-    });
   }
 };
+
+
 
 /**
  * @desc    Obtener respuestas de encuesta de un usuario
@@ -554,16 +590,108 @@ const obtenerEstadisticasEncuesta = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Completar encuesta sin autenticación (generar PDF sin guardar en BD)
+ * @route   POST /api/encuestas/:id/completar-sin-auth
+ * @access  Public
+ */
+const completarEncuestaSinAuth = async (req, res) => {
+  try {
+    const { id } = req.params; // id de la encuesta
+    const { respuestas } = req.body;
+
+    if (!respuestas || !Array.isArray(respuestas)) {
+      return res.status(400).json({
+        error: 'Campo requerido faltante',
+        detalles: 'respuestas debe ser un array válido'
+      });
+    }
+
+    // Obtener encuesta
+    const encuesta = await encuestasService.obtenerEncuestaPorId(id);
+
+    // Completar cada respuesta con tipo, enunciado y puntaje
+    const respuestasCompletas = respuestas.map(r => {
+      const pregunta = encuesta.preguntas.find(p => p.orden === r.preguntaOrden);
+      if (!pregunta) {
+        throw new Error(`Pregunta con orden ${r.preguntaOrden} no encontrada en la encuesta`);
+      }
+
+      // Asignar puntaje usando la nueva función
+      const puntaje = calcularPuntajeRespuesta(pregunta, r.respuesta);
+
+      return {
+        ...r,
+        preguntaTipo: pregunta.tipo,
+        preguntaEnunciado: pregunta.enunciado,
+        puntaje
+      };
+    });
+
+    // Validar preguntas obligatorias
+    const preguntasObligatorias = encuesta.preguntas.filter(p => p.obligatoria);
+    for (const pregunta of preguntasObligatorias) {
+      const r = respuestasCompletas.find(x => x.preguntaOrden === pregunta.orden);
+      if (!r || r.respuesta === undefined || r.respuesta === '' || (Array.isArray(r.respuesta) && r.respuesta.length === 0)) {
+        return res.status(400).json({
+          error: 'Campos obligatorios faltantes',
+          detalles: `La pregunta "${pregunta.enunciado}" es obligatoria`
+        });
+      }
+    }
+
+    // Calcular puntaje total
+    const puntajeTotal = respuestasCompletas.reduce((acc, r) => acc + (r.puntaje || 0), 0);
+
+    // Determinar nivel de riesgo usando rangos dinámicos o predefinidos
+    const nivelRiesgo = determinarNivelRiesgo(puntajeTotal, encuesta);
+
+    // Generar recomendaciones
+    const recomendaciones = encuestasService.generarRecomendaciones
+      ? encuestasService.generarRecomendaciones(puntajeTotal, nivelRiesgo, encuesta)
+      : [];
+
+    // Crear objeto temporal para PDF
+    const respuestaTemporal = {
+      respuestas: respuestasCompletas,
+      fechaCompletado: new Date(),
+      puntajeTotal,
+      nivelRiesgo,
+      recomendaciones
+    };
+
+    // Generar PDF
+    const pdfBuffer = await generarPDFEncuesta(respuestaTemporal, encuesta);
+
+    // Configurar headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename=Encuesta_${id}.pdf`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.end(pdfBuffer);
+
+  } catch (error) {
+    console.error('❌ Error al completar encuesta sin auth:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Error interno del servidor',
+        detalles: error.message
+      });
+    }
+  }
+};
+
+
+
 module.exports = {
   crearEncuesta,
   obtenerEncuestas,
   obtenerEncuestaPorId,
   actualizarEncuesta,
   desactivarEncuesta,
+  eliminarEncuesta,
   activarEncuesta,
-  iniciarEncuesta,
-  guardarRespuestaParcial,
   completarEncuesta,
   obtenerRespuestasUsuario,
-  obtenerEstadisticasEncuesta
+  obtenerEstadisticasEncuesta,
+  completarEncuestaSinAuth,
 };

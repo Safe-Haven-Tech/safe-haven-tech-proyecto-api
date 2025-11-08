@@ -8,7 +8,8 @@ const {
   moderarComentario,
   obtenerDenuncias,
   resolverDenuncia,
-  obtenerComentariosModerados
+  obtenerComentariosModerados,
+  getDenunciaById
 } = require('../controllers/moderacionController');
 
 // Todas las rutas requieren autenticación y rol de administrador
@@ -19,6 +20,7 @@ router.use(verificarRol(['administrador']));
 router.patch('/publicaciones/:id', moderarPublicacion);
 router.patch('/comentarios/:id', moderarComentario);
 router.get('/denuncias', obtenerDenuncias);
+router.get('/denuncias/:id', getDenunciaById);
 router.patch('/denuncias/:id', resolverDenuncia);
 router.get('/comentarios', obtenerComentariosModerados);
 

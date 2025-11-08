@@ -11,7 +11,7 @@ const { subirMultiplesArchivos, eliminarMultiplesArchivos } = require('../utils/
 const crearPublicacion = async (req, res) => {
   try {
     // Obtener datos del JSON
-    const { contenido, tipo, anonimo, etiquetasUsuarios } = req.body;
+    const { contenido, tipo, anonimo, etiquetasUsuarios, topico } = req.body;
     const autorId = req.usuario.userId;
 
     // Validar campos requeridos
@@ -30,6 +30,14 @@ const crearPublicacion = async (req, res) => {
       });
     }
 
+    // Validar tópico si es foro
+    if (tipo === 'foro' && !topico) {
+      return res.status(400).json({
+        error: 'Campo requerido faltante',
+        detalles: 'El tópico es obligatorio para publicaciones de foro'
+      });
+    }
+
     const publicacion = await publicacionesService.crearPublicacion({
       autorId,
       contenido,
@@ -37,7 +45,8 @@ const crearPublicacion = async (req, res) => {
       anonimo: anonimo || false,
       multimedia: [],
       etiquetasUsuarios: etiquetasUsuarios || [],
-      archivosAdjuntos: []
+      archivosAdjuntos: [],
+      topico: tipo === 'foro' ? topico : undefined
     });
 
     res.status(201).json({
@@ -180,16 +189,18 @@ const subirArchivosAPublicacion = async (req, res) => {
  */
 const obtenerPublicaciones = async (req, res) => {
   try {
-    const { pagina = 1, limite = 10, tipo, busqueda } = req.query;
+    const { pagina = 1, limite = 10, tipo, busqueda, topico } = req.query;
     const usuarioId = req.usuario ? req.usuario.userId : null;
     const esAdmin = req.usuario ? req.usuario.rol === 'admin' : false;
+
     
-    const publicaciones = await publicacionesService.obtenerPublicaciones({
-      pagina: parseInt(pagina),
-      limite: parseInt(limite),
-      tipo,
-      busqueda
-    }, parseInt(pagina), parseInt(limite), usuarioId, esAdmin);
+    const publicaciones = await publicacionesService.obtenerPublicaciones(
+      { tipo, busqueda, topico }, // solo filtros
+      parseInt(pagina),
+      parseInt(limite),
+      usuarioId,
+      esAdmin
+    );
 
     res.json(publicaciones);
   } catch (error) {
@@ -199,7 +210,7 @@ const obtenerPublicaciones = async (req, res) => {
       detalles: error.message
     });
   }
-};
+}
 
 /**
  * @desc    Obtener publicación por ID
@@ -246,7 +257,7 @@ const actualizarPublicacion = async (req, res) => {
   try {
     const { id } = req.params;
     // Obtener datos del JSON
-    const { contenido, etiquetasUsuarios } = req.body;
+    const { contenido, etiquetasUsuarios, topico } = req.body;
     const usuarioId = req.usuario.userId;
     const esAdmin = req.usuario.rol === 'administrador';
 
@@ -258,12 +269,18 @@ const actualizarPublicacion = async (req, res) => {
       });
     }
 
+    // Si se envía topico, agregarlo al update
+    const updateData = { 
+      contenido, 
+      etiquetasUsuarios: etiquetasUsuarios || []
+    };
+    if (typeof topico !== 'undefined') {
+      updateData.topico = topico;
+    }
+
     const publicacion = await publicacionesService.actualizarPublicacion(
       id,
-      { 
-        contenido, 
-        etiquetasUsuarios: etiquetasUsuarios || []
-      },
+      updateData,
       usuarioId,
       esAdmin
     );
@@ -350,14 +367,15 @@ const darLike = async (req, res) => {
     const { id } = req.params;
     const usuarioId = req.usuario.userId;
 
-    const resultado = await publicacionesService.darLike(id, usuarioId);
+    const publicacion = await publicacionesService.darLike(id, usuarioId);
 
     res.json({
-      mensaje: resultado.mensaje,
-      likes: resultado.likes,
+      mensaje: 'Like agregado exitosamente',
+      likes: publicacion.likes, 
+      likesCount: publicacion.likes.length, 
+      yaDioLike: publicacion.likes.some(uid => uid.toString() === usuarioId.toString()),
       timestamp: new Date().toISOString()
     });
-
   } catch (error) {
     console.error('❌ Error al dar like:', error);
 
@@ -469,11 +487,13 @@ const quitarLike = async (req, res) => {
     const { id } = req.params;
     const usuarioId = req.usuario.userId;
 
-    const resultado = await publicacionesService.quitarLike(id, usuarioId);
+    const publicacion = await publicacionesService.quitarLike(id, usuarioId);
 
     res.json({
-      mensaje: resultado.mensaje,
-      likes: resultado.likes,
+      mensaje: 'Like quitado exitosamente',
+      likes: publicacion.likes,
+      likesCount: publicacion.likes.length,
+      yaDioLike: publicacion.likes.some(uid => uid.toString() === usuarioId.toString()),
       timestamp: new Date().toISOString()
     });
 
@@ -493,6 +513,7 @@ const quitarLike = async (req, res) => {
     });
   }
 };
+
 
 /**
  * @desc    Crear comentario en una publicación
@@ -604,6 +625,79 @@ const denunciarPublicacion = async (req, res) => {
   }
 };
 
+// ...existing code...
+
+/**
+ * @desc    Eliminar comentario de una publicación
+ * @route   DELETE /api/publicaciones/:id/comentarios/:comentarioId
+ * @access  Private (autor del comentario o administrador)
+ */
+const eliminarComentario = async (req, res) => {
+  try {
+    const { comentarioId } = req.params;
+    const usuarioId = req.usuario.userId;
+    const esAdmin = req.usuario.rol === 'administrador';
+
+    
+    const resultado = await comentariosService.eliminarComentario(comentarioId, usuarioId, esAdmin);
+
+    res.json({
+      mensaje: resultado.mensaje || 'Comentario eliminado exitosamente',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Error al eliminar comentario:', error);
+
+    if (error.message === 'Comentario no encontrado') {
+      return res.status(404).json({
+        error: 'Comentario no encontrado',
+        detalles: error.message
+      });
+    }
+    if (error.message === 'No tienes permisos para eliminar este comentario') {
+      return res.status(403).json({
+        error: 'Sin permisos',
+        detalles: error.message
+      });
+    }
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: error.message
+    });
+  }
+};
+
+
+/**
+ * @desc    Obtener publicaciones de un usuario (opcionalmente filtradas por tipo)
+ * @route   GET /api/publicaciones/usuario/:usuarioId
+ * @access  Public
+ */
+const obtenerPublicacionesPorUsuario = async (req, res) => {
+  try {
+    const { usuarioId } = req.params;
+    const { tipo, topico } = req.query;
+    const pagina = parseInt(req.query.pagina) || 1;
+    const limite = parseInt(req.query.limite) || 20;
+
+    const publicaciones = await publicacionesService.obtenerPublicacionesPorUsuario(
+      usuarioId,
+      tipo,
+      pagina,
+      limite,
+      topico
+    );
+
+    res.json({ posts: publicaciones });
+  } catch (error) {
+    console.error('❌ Error al obtener publicaciones por usuario:', error);
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: error.message
+    });
+  }
+};
+
 /**
  * @desc    Denunciar un comentario
  * @route   POST /api/publicaciones/comentarios/:id/denunciar
@@ -680,5 +774,7 @@ module.exports = {
   crearComentario,
   obtenerComentarios,
   denunciarPublicacion,
+  eliminarComentario,
+  obtenerPublicacionesPorUsuario,
   denunciarComentario
 };
