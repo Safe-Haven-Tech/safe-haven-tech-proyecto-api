@@ -193,9 +193,6 @@ async crearPostulacion(usuarioId, datos) {
         const postulacion = await PostulacionProfesional.findById(postulacionId).session(session);
         if (!postulacion) throw new Error('No existe una postulación con el ID proporcionado');
         if (postulacion.estado !== 'pendiente') throw new Error('Solo se pueden aprobar postulaciones pendientes');
-        if (!postulacion.archivos || postulacion.archivos.length === 0) {
-          throw new Error('No se puede aprobar una postulación sin documentos adjuntos');
-        }
 
         postulacion.estado = 'aprobada';
         postulacion.revisadoPor = adminId;
