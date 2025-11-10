@@ -200,14 +200,23 @@ async crearPostulacion(usuarioId, datos) {
         postulacion.observaciones = observaciones;
         await postulacion.save({ session });
 
+        // Actualizar usuario: además de rol, copiar infoProfesional y campos útiles
+        const update = {
+          rol: 'profesional',
+        };
+        if (postulacion.infoProfesional) {
+          update.infoProfesional = postulacion.infoProfesional;
+        }
+        if (postulacion.nombreCompleto) update.nombreCompleto = postulacion.nombreCompleto;
+        if (postulacion.fotoPerfil) update.fotoPerfil = postulacion.fotoPerfil;
+
         const usuario = await Usuario.findByIdAndUpdate(
           postulacion.usuarioId,
-          { rol: 'profesional' },
+          update,
           { new: true, session }
         ).select('-contraseña');
 
-        // poblar usuario en postulacion para retorno limpio
-        await postulacion.populate('usuarioId', 'nombreCompleto correo nombreUsuario');
+        await postulacion.populate('usuarioId', 'nombreCompleto correo nombreUsuario fotoPerfil infoProfesional');
 
         resultado = { postulacion, usuario };
         console.log(`✅ Postulación aprobada (id=${postulacionId}). Usuario ${usuario?.correo || postulacion.usuarioId} actualizado a 'profesional'`);
@@ -221,7 +230,6 @@ async crearPostulacion(usuarioId, datos) {
       session.endSession();
     }
   }
-
   /**
    * Rechazar una postulación (transaccional)
    * @param {String} postulacionId

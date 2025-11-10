@@ -50,6 +50,13 @@ router.post('/:id/compartidos', validarIdMongo, recursosInformativosController.i
 // Rutas privadas (requieren autenticación)
 router.use(autenticarToken);
 
+// Ruta para calificar un recurso (usuarios autenticados)
+router.post(
+  '/:id/calificar',
+  validarIdMongo,
+  recursosInformativosController.calificarRecurso
+);
+
 // Rutas para administradores y profesionales
 router.post('/', verificarRol(['administrador', 'profesional']), recursosInformativosController.crearRecurso);
 router.put('/:id', verificarRol(['administrador', 'profesional']), validarIdMongo, recursosInformativosController.actualizarRecurso);
