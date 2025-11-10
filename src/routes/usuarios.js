@@ -14,7 +14,8 @@ const {
   obtenerUsuarioPublico,
   eliminarUsuario,
   verificarNickname,
-  obtenerConexiones
+  obtenerConexiones,
+  registrarUsuarioAdmin
 } = require('../controllers/usuariosController');
 
 const upload = require('../utils/multer');
@@ -125,5 +126,20 @@ router.put('/:id/info-profesional', validarIdMongo, autenticarToken, verificarPr
  * @access  Private (usuario propio o administrador)
  */
 router.delete('/:id', validarIdMongo, autenticarToken, verificarPropietario('id'), eliminarUsuario);
+
+
+/**
+ * @route   POST /api/usuarios/admin
+ * @desc    Registrar un nuevo usuario (ruta ADMIN, permite asignar rol)
+ * @access  Private (solo administradores)
+ */
+router.post(
+  '/admin',
+  autenticarToken,
+  verificarRol('administrador'),
+  upload.single('fotoPerfil'),
+  validarRegistroUsuario,
+  registrarUsuarioAdmin
+);
 
 module.exports = router;

@@ -73,8 +73,8 @@ const seguirUsuario = async (usuarioId, usuarioASeguirId) => {
         usuarioASeguirId,
         usuarioId,
         'solicitud_seguimiento',
-        `${usuario.nombreCompleto} quiere seguirte`,
-        `/perfil/${usuarioId}`
+        `${usuario.nombreUsuario} quiere seguirte`,
+        `/perfil/${usuario.nombreUsuario}`
       );
 
       return {
@@ -93,8 +93,8 @@ const seguirUsuario = async (usuarioId, usuarioASeguirId) => {
         usuarioASeguirId,
         usuarioId,
         'nuevo_seguidor',
-        `${usuario.nombreCompleto} comenzó a seguirte`,
-        `/perfil/${usuarioId}`
+        `${usuario.nombreUsuario} comenzó a seguirte`,
+        `/perfil/${usuario.nombreUsuario}`
       );
 
       return {
@@ -740,8 +740,8 @@ const aceptarSolicitudSeguimiento = async (usuarioId, solicitanteId) => {
       solicitanteId,
       usuarioId,
       'solicitud_aceptada',
-      `${usuario.nombreCompleto} aceptó tu solicitud de seguimiento`,
-      `/perfil/${usuarioId}`
+      `${usuario.nombreUsuario} aceptó tu solicitud de seguimiento`,
+      `/perfil/${usuario.nombreUsuario}`
     );
 
     return {

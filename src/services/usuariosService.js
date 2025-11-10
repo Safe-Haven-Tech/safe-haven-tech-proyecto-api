@@ -634,6 +634,78 @@ async eliminarUsuario(id, contraseña = null) {
       throw new Error(`Error en usuariosService.buscarProfesionales: ${error.message}`);
     }
   }
+
+    /**
+  * Registrar un nuevo usuario desde contexto administrador (permite asignar rol 'administrador')
+   * @param {Object} datosUsuario
+   * @returns {Object} Usuario creado sin contraseña
+   */
+  async registrarUsuarioAdmin(datosUsuario) {
+    const {
+      correo,
+      contraseña,
+      nombreCompleto,
+      fechaNacimiento,
+      rol = 'usuario',
+      anonimo,
+      visibilidadPerfil,
+      nombreUsuario,
+      pronombres,
+      biografia,
+      genero,
+      creadoPorAdmin
+    } = datosUsuario;
+
+    // Campos requeridos
+    if (!correo || !contraseña || !nombreUsuario) {
+      throw new Error('correo, contraseña y nombreUsuario son requeridos');
+    }
+
+    // Validar unicidad de correo y nombreUsuario
+    const usuarioExistente = await Usuario.findOne({ correo: correo.toLowerCase() });
+    if (usuarioExistente) {
+      throw new Error('El correo electrónico ya está registrado en el sistema');
+    }
+    const nombreUsuarioExistente = await Usuario.findOne({ nombreUsuario: nombreUsuario.toLowerCase() });
+    if (nombreUsuarioExistente) {
+      throw new Error('El nombre de usuario ya está en uso');
+      }
+
+    // Validar rol permitido (incluye administrador)
+    if (rol && !['usuario', 'profesional', 'administrador'].includes(rol)) {
+      throw new Error('Rol no válido. Solo se permiten los roles: usuario, profesional o administrador');
+    }
+
+    // Encriptar contraseña
+    const saltRounds = config.seguridad.bcryptRounds;
+    const contraseñaEncriptada = await bcrypt.hash(contraseña, saltRounds);
+
+    // Crear nuevo usuario (permitir administrador aquí)
+    const nuevoUsuario = new Usuario({
+      correo: correo.toLowerCase(),
+      contraseña: contraseñaEncriptada,
+      nombreCompleto,
+      fechaNacimiento: fechaNacimiento ? new Date(fechaNacimiento) : undefined,
+      rol: rol || 'usuario',
+      anonimo: !!anonimo,
+      visibilidadPerfil: visibilidadPerfil || 'publico',
+      nombreUsuario: nombreUsuario.toLowerCase(),
+      pronombres: pronombres || '',
+      biografia: biografia || '',
+      genero: genero || '',
+      creadoPorAdmin: creadoPorAdmin || undefined,
+      activo: true
+    });
+
+    const usuarioGuardado = await nuevoUsuario.save();
+
+    // Remover contraseña de la respuesta
+    const usuarioResponse = usuarioGuardado.toObject();
+    delete usuarioResponse.contraseña;
+
+    console.log(`✅ Usuario (admin) registrado exitosamente: ${usuarioGuardado.correo}`);
+    return usuarioResponse;
+  }
 }
 
 

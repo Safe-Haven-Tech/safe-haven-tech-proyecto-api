@@ -799,6 +799,55 @@ const obtenerConexiones = async (req, res) => {
   }
 };
 
+
+/**
+ * @desc    Registrar un nuevo usuario (ruta ADMIN, permite rol)
+ * @route   POST /api/usuarios/admin
+ * @access  Private (solo administradores)
+ */
+const registrarUsuarioAdmin = async (req, res) => {
+  try {
+    const {
+      nombreCompleto,
+      nombreUsuario,
+      correo,
+      contraseña,
+      fechaNacimiento,
+      rol,
+      anonimo,
+      visibilidadPerfil,
+      genero,
+    } = req.body;
+
+    // Si multer puso archivo
+    const archivo = req.file;
+
+    // Llamar al servicio específico para admin (permite rol explícito)
+    const usuario = await usuariosService.registrarUsuarioAdmin({
+      nombreCompleto,
+      nombreUsuario,
+      correo,
+      contraseña,
+      fechaNacimiento,
+      rol,
+      anonimo,
+      visibilidadPerfil,
+      genero,
+      archivo,
+      creadoPorAdminId: req.usuario && (req.usuario.id || req.usuario._id),
+    });
+
+    return res.status(201).json(usuario);
+  } catch (err) {
+    console.error('registrarUsuarioAdmin error:', err);
+    const status = err?.status || 400;
+    return res.status(status).json({
+      error: err?.message || 'Error al crear usuario (admin)',
+      detalles: err?.detalles || null,
+    });
+  }
+};
+
 module.exports = {
   registrarUsuario,
   obtenerUsuarios,
@@ -814,5 +863,6 @@ module.exports = {
   buscarProfesionales,
   obtenerUsuarioPublico,
   verificarNickname,
-  obtenerConexiones
+  obtenerConexiones,
+  registrarUsuarioAdmin
 };
