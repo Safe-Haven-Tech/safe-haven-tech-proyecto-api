@@ -97,7 +97,42 @@ const EncuestaSchema = new Schema({
   version: {
     type: String,
     default: '1.0'
-  }
+  },
+  // Recomendaciones dinámicas por rango de puntaje
+  // Si no se definen, se usarán las recomendaciones por defecto del código
+  recomendacionesPorNivel: [{
+    rangoMin: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    rangoMax: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    nivel: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: [50, 'El nombre del nivel no puede exceder 50 caracteres']
+    },
+    descripcion: {
+      type: String,
+      trim: true,
+      maxlength: [200, 'La descripción del nivel no puede exceder 200 caracteres']
+    },
+    recomendaciones: [{
+      type: String,
+      trim: true,
+      maxlength: [500, 'Cada recomendación no puede exceder 500 caracteres']
+    }],
+    colorHexadecimal: {
+      type: String,
+      match: [/^#[0-9A-F]{6}$/i, 'El color debe estar en formato hexadecimal (ej: #FF5733)'],
+      default: '#4CAF50'
+    }
+  }]
 }, {
   timestamps: true
 });
@@ -127,6 +162,32 @@ EncuestaSchema.methods.obtenerPreguntaAnterior = function(ordenActual) {
   return this.preguntas
     .filter(p => p.orden < ordenActual)
     .sort((a, b) => b.orden - a.orden)[0];
+};
+
+// Método para obtener recomendaciones según puntaje
+EncuestaSchema.methods.obtenerRecomendacionesPorPuntaje = function(puntaje) {
+  // Si no hay recomendaciones personalizadas, retornar null (usará las por defecto)
+  if (!this.recomendacionesPorNivel || this.recomendacionesPorNivel.length === 0) {
+    return null;
+  }
+
+  // Buscar el nivel que corresponda al puntaje
+  // Los rangos deben estar ordenados por rangoMin
+  const nivelEncontrado = this.recomendacionesPorNivel.find(nivel => 
+    puntaje >= nivel.rangoMin && puntaje <= nivel.rangoMax
+  );
+
+  if (nivelEncontrado) {
+    return {
+      nivel: nivelEncontrado.nivel,
+      descripcion: nivelEncontrado.descripcion,
+      recomendaciones: nivelEncontrado.recomendaciones,
+      color: nivelEncontrado.colorHexadecimal
+    };
+  }
+
+  // Si no se encuentra un rango, retornar null (usará las por defecto)
+  return null;
 };
 
 // Índices para optimizar consultas

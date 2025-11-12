@@ -8,7 +8,7 @@ const { config } = require('../config');
  */
 const crearEncuesta = async (req, res) => {
   try {
-    const { titulo, descripcion, preguntas, categoria, tiempoEstimado } = req.body;
+    const { titulo, descripcion, preguntas, categoria, tiempoEstimado, recomendacionesPorNivel } = req.body;
     const usuarioId = req.usuario.userId;
 
     // Validar campos requeridos
@@ -43,7 +43,8 @@ const crearEncuesta = async (req, res) => {
       preguntas,
       categoria,
       tiempoEstimado,
-      creadoPor: usuarioId
+      creadoPor: usuarioId,
+      recomendacionesPorNivel: recomendacionesPorNivel || []
     };
 
     const encuesta = await encuestasService.crearEncuesta(datosEncuesta);
@@ -161,6 +162,9 @@ const actualizarEncuesta = async (req, res) => {
     const { id } = req.params;
     const datosActualizados = req.body;
     const usuarioId = req.usuario.userId;
+    
+    console.log('📝 Actualizando encuesta:', id);
+    console.log('📊 Niveles a actualizar:', datosActualizados.recomendacionesPorNivel?.length || 0);
 
     const encuesta = await encuestasService.actualizarEncuesta(id, datosActualizados, usuarioId);
 
@@ -421,6 +425,68 @@ const guardarRespuestaParcial = async (req, res) => {
 };
 
 /**
+ * @desc    Completar encuesta directamente (sin iniciar antes)
+ * @route   POST /api/encuestas/:id/completar
+ * @route   POST /api/encuestas/:id/completar-sin-auth
+ * @access  Public / Private
+ */
+const completarEncuestaDirecta = async (req, res) => {
+  try {
+    const { id: encuestaId } = req.params;
+    const { respuestas } = req.body;
+    const usuarioId = req.usuario?.userId || null;
+
+    if (!respuestas || !Array.isArray(respuestas)) {
+      return res.status(400).json({
+        error: 'Campo requerido faltante',
+        detalles: 'respuestas debe ser un array válido'
+      });
+    }
+
+    // Verificar que la encuesta existe y está activa
+    const encuesta = await encuestasService.obtenerEncuestaPorId(encuestaId);
+    if (!encuesta) {
+      return res.status(404).json({
+        error: 'Encuesta no encontrada'
+      });
+    }
+
+    // Iniciar y completar en un solo paso
+    const { nuevaRespuesta } = await encuestasService.iniciarEncuesta(encuestaId, usuarioId);
+    
+    if (!nuevaRespuesta || !nuevaRespuesta._id) {
+      throw new Error('Error al iniciar la encuesta');
+    }
+    
+    const { respuesta: respuestaCompletada, pdfBuffer } = await encuestasService.completarEncuesta(
+      nuevaRespuesta._id.toString(),
+      respuestas,
+      usuarioId
+    );
+
+    // Devolver la URL de Cloudinary para que el frontend abra el PDF desde ahí
+    res.status(200).json({
+      mensaje: 'Encuesta completada exitosamente',
+      pdfUrl: respuestaCompletada.resultadoPDF, // URL de Cloudinary
+      respuesta: {
+        id: respuestaCompletada._id,
+        puntajeTotal: respuestaCompletada.puntajeTotal,
+        nivelRiesgo: respuestaCompletada.nivelRiesgo,
+        recomendaciones: respuestaCompletada.recomendaciones
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error al completar encuesta directa:', error);
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+    });
+  }
+};
+
+/**
  * @desc    Completar encuesta
  * @route   PUT /api/encuestas/respuestas/:respuestaId/completar
  * @access  Private
@@ -438,7 +504,7 @@ const completarEncuesta = async (req, res) => {
       });
     }
 
-    const respuesta = await encuestasService.completarEncuesta(respuestaId, respuestas, usuarioId);
+    const { respuesta, pdfBuffer } = await encuestasService.completarEncuesta(respuestaId, respuestas, usuarioId);
 
     res.status(200).json({
       mensaje: 'Encuesta completada exitosamente',
@@ -564,6 +630,7 @@ module.exports = {
   iniciarEncuesta,
   guardarRespuestaParcial,
   completarEncuesta,
+  completarEncuestaDirecta,
   obtenerRespuestasUsuario,
   obtenerEstadisticasEncuesta
 };

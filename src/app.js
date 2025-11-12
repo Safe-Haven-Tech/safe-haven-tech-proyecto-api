@@ -32,6 +32,9 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
+// Rate limiter desactivado para desarrollo
+// Si necesitas activarlo en producción, descomenta el código siguiente:
+/*
 const limiter = rateLimit({
   windowMs: config.seguridad.rateLimitWindow,
   max: config.seguridad.rateLimitMax,
@@ -44,6 +47,9 @@ const limiter = rateLimit({
 });
 
 app.use('/api/', limiter);
+console.log(`✅ Rate limiter activo: ${config.seguridad.rateLimitMax} solicitudes cada ${config.seguridad.rateLimitWindow / 1000} segundos`);
+*/
+console.log('⚠️ Rate limiter desactivado');
 
 const formatoLog = config.servidor.entorno === 'production' ? 'combined' : 'dev';
 app.use(morgan(formatoLog, {

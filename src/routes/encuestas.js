@@ -12,6 +12,7 @@ const {
   iniciarEncuesta,
   guardarRespuestaParcial,
   completarEncuesta,
+  completarEncuestaDirecta,
   obtenerRespuestasUsuario,
   obtenerEstadisticasEncuesta
 } = require('../controllers/encuestasController');
@@ -25,6 +26,12 @@ router.get('/', obtenerEncuestas);
 
 // Obtener una encuesta específica por ID
 router.get('/:id', obtenerEncuestaPorId);
+
+// Completar encuesta directamente (genera PDF) - CON autenticación
+router.post('/:id/completar', autenticarToken, completarEncuestaDirecta);
+
+// Completar encuesta sin autenticación (para usuarios anónimos)
+router.post('/:id/completar-sin-auth', completarEncuestaDirecta);
 
 // ======================= RUTAS PRIVADAS =======================
 // Todas las rutas a partir de aquí requieren autenticación

@@ -1,6 +1,45 @@
 const puppeteer = require('puppeteer');
 
 /**
+ * Mapeo de categorías a nombres amigables
+ */
+const categoriasMap = {
+  'salud_mental': 'Salud Mental',
+  'bienestar': 'Bienestar',
+  'estres': 'Estrés',
+  'ansiedad': 'Ansiedad',
+  'depresion': 'Depresión',
+  'otro': 'Otro'
+};
+
+/**
+ * Formatea una categoría para mostrar al usuario
+ */
+const formatearCategoria = (categoria) => {
+  if (!categoria) return 'Sin categoría';
+  return categoriasMap[categoria] || categoria.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+};
+
+/**
+ * Mapeo de niveles de riesgo a nombres amigables
+ */
+const nivelesRiesgoMap = {
+  'bajo': 'Bajo Riesgo',
+  'medio': 'Riesgo Medio',
+  'alto': 'Alto Riesgo',
+  'crítico': 'Riesgo Crítico',
+  'critico': 'Riesgo Crítico'
+};
+
+/**
+ * Formatea un nivel de riesgo para mostrar al usuario
+ */
+const formatearNivelRiesgo = (nivel) => {
+  if (!nivel) return 'N/A';
+  return nivelesRiesgoMap[nivel.toLowerCase()] || nivel.toUpperCase();
+};
+
+/**
  * @desc    Generar PDF con los resultados de la encuesta usando Puppeteer
  * @param   {Object} respuesta - Respuesta de la encuesta
  * @param   {Object} encuesta - Datos de la encuesta
@@ -176,7 +215,7 @@ const generarHTMLEncuesta = (respuesta, encuesta) => {
           </div>
           <div class="info-item">
             <div class="info-label">Categoría encuesta:</div>
-            <div>${encuesta.categoria}</div>
+            <div>${formatearCategoria(encuesta.categoria)}</div>
           </div>
           ${respuesta.tiempoCompletado ? `
           <div class="info-item">
@@ -198,10 +237,40 @@ const generarHTMLEncuesta = (respuesta, encuesta) => {
               </div>
             </div>
             <div class="info-item">
-              <div class="info-label">Nivel de riesgo:</div>
-              <div class="risk-level risk-${respuesta.nivelRiesgo || 'bajo'}">
-                ${respuesta.nivelRiesgo || 'N/A'}
-              </div>
+              <div class="info-label">Nivel:</div>
+              ${(() => {
+                let color = '#4CAF50'; 
+                let descripcionNivel = '';
+                
+                if (encuesta.recomendacionesPorNivel && encuesta.recomendacionesPorNivel.length > 0) {
+                  const nivelEncontrado = encuesta.recomendacionesPorNivel.find(nivel => 
+                    respuesta.puntajeTotal >= nivel.rangoMin && respuesta.puntajeTotal <= nivel.rangoMax
+                  );
+                  if (nivelEncontrado) {
+                    color = nivelEncontrado.colorHexadecimal || color;
+                    descripcionNivel = nivelEncontrado.descripcion || '';
+                  }
+                } else {
+                  const coloresDefecto = {
+                    'bajo': '#4CAF50',
+                    'medio': '#FF9800',
+                    'alto': '#F44336',
+                    'crítico': '#9C27B0'
+                  };
+                  color = coloresDefecto[respuesta.nivelRiesgo] || color;
+                }
+                
+                return `
+                  <div class="risk-level" style="background: ${color};">
+                    ${formatearNivelRiesgo(respuesta.nivelRiesgo)}
+                  </div>
+                  ${descripcionNivel ? `
+                    <div style="margin-top: 10px; font-size: 12px; color: #666; font-style: italic;">
+                      ${descripcionNivel}
+                    </div>
+                  ` : ''}
+                `;
+              })()}
             </div>
           </div>
         </div>

@@ -6,7 +6,12 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "crear-usuarios": "node src/scripts/crearUsuarios.js",
+    "crear-profesional": "node src/scripts/crearUsuarioProfesional.js",
+    "crear-encuestas": "node src/scripts/crearEncuestas.js",
+    "crear-datos-prueba": "node src/scripts/crearDatosPrueba.js",
+    "setup-testing": "npm run crear-encuestas && npm run crear-datos-prueba"
   },
   "repository": {
     "type": "git",

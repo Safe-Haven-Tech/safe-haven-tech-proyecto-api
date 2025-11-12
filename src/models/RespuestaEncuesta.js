@@ -31,7 +31,8 @@ const RespuestaEncuestaSchema = new Schema({
   usuarioId: {
     type: Schema.Types.ObjectId,
     ref: 'Usuario',
-    required: [true, 'El ID del usuario es obligatorio']
+    required: false, // Permitir null para usuarios anónimos
+    default: null
   },
   encuestaId: {
     type: Schema.Types.ObjectId,
@@ -161,8 +162,26 @@ RespuestaEncuestaSchema.methods.determinarNivelRiesgo = function() {
   return this.nivelRiesgo;
 };
 
-// Método para generar recomendaciones básicas
-RespuestaEncuestaSchema.methods.generarRecomendaciones = function() {
+// Método para generar recomendaciones (dinámicas o por defecto)
+RespuestaEncuestaSchema.methods.generarRecomendaciones = async function(encuesta) {
+  // Si se proporcionó la encuesta y tiene recomendaciones personalizadas, usarlas
+  if (encuesta && encuesta.recomendacionesPorNivel && encuesta.recomendacionesPorNivel.length > 0) {
+    const puntaje = this.puntajeTotal || 0;
+    
+    // Buscar el nivel que corresponda al puntaje
+    const nivelEncontrado = encuesta.recomendacionesPorNivel.find(nivel => 
+      puntaje >= nivel.rangoMin && puntaje <= nivel.rangoMax
+    );
+
+    if (nivelEncontrado) {
+      // El nivel ya viene del enum: bajo, medio, alto, crítico
+      this.nivelRiesgo = nivelEncontrado.nivel;
+      this.recomendaciones = nivelEncontrado.recomendaciones || [];
+      return this.recomendaciones;
+    }
+  }
+
+  // Si no hay recomendaciones personalizadas, usar las por defecto
   const recomendaciones = [];
   
   switch (this.nivelRiesgo) {
@@ -185,6 +204,8 @@ RespuestaEncuestaSchema.methods.generarRecomendaciones = function() {
       recomendaciones.push('Contacta líneas de crisis o emergencias');
       recomendaciones.push('No dudes en pedir ayuda a profesionales de la salud');
       break;
+    default:
+      recomendaciones.push('Revisa tus resultados con un profesional de confianza');
   }
   
   this.recomendaciones = recomendaciones;
@@ -192,13 +213,21 @@ RespuestaEncuestaSchema.methods.generarRecomendaciones = function() {
 };
 
 // Método para marcar como completada
-RespuestaEncuestaSchema.methods.marcarCompletada = function() {
+RespuestaEncuestaSchema.methods.marcarCompletada = async function(encuesta = null) {
   this.completada = true;
   this.estado = 'completada';
   this.fechaCompletado = new Date();
   this.calcularPuntaje();
-  this.determinarNivelRiesgo();
-  this.generarRecomendaciones();
+  
+  // Si la encuesta tiene recomendaciones personalizadas, usar esas para determinar nivel
+  if (encuesta && encuesta.recomendacionesPorNivel && encuesta.recomendacionesPorNivel.length > 0) {
+    // No llamar determinarNivelRiesgo, lo hará generarRecomendaciones
+    await this.generarRecomendaciones(encuesta);
+  } else {
+    // Usar el sistema por defecto
+    this.determinarNivelRiesgo();
+    await this.generarRecomendaciones();
+  }
 };
 
 // Índices para optimizar consultas

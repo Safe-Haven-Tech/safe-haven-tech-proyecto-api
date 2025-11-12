@@ -227,16 +227,18 @@ const iniciarEncuesta = async (encuestaId, usuarioId) => {
     // Validar que la encuesta exista y esté activa
     const encuesta = await obtenerEncuestaPorId(encuestaId);
     
-    // Verificar si ya existe una respuesta en progreso
-    const respuestaExistente = await RespuestaEncuesta.findOne({
-      usuarioId,
-      encuestaId,
-      estado: { $in: ['en_progreso', 'completada'] }
-    });
+    // Verificar si ya existe una respuesta en progreso (solo para usuarios autenticados)
+    if (usuarioId) {
+      const respuestaExistente = await RespuestaEncuesta.findOne({
+        usuarioId,
+        encuestaId,
+        estado: { $in: ['en_progreso', 'completada'] }
+      });
 
-    if (respuestaExistente) {
-      if (respuestaExistente.estado === 'en_progreso') {
-        return {nuevaRespuesta: respuestaExistente, esNueva: false}; // Retornar la respuesta en progreso
+      if (respuestaExistente) {
+        if (respuestaExistente.estado === 'en_progreso') {
+          return {nuevaRespuesta: respuestaExistente, esNueva: false}; // Retornar la respuesta en progreso
+        }
       }
     }
 
@@ -323,8 +325,11 @@ const completarEncuesta = async (respuestaId, respuestas, usuarioId) => {
       throw new Error('Respuesta de encuesta no encontrada');
     }
 
-    if (respuesta.usuarioId.toString() !== usuarioId) {
-      throw new Error('No tienes permisos para completar esta respuesta');
+    // Validar permisos (solo si hay usuario autenticado)
+    if (usuarioId && respuesta.usuarioId) {
+      if (respuesta.usuarioId.toString() !== usuarioId.toString()) {
+        throw new Error('No tienes permisos para completar esta respuesta');
+      }
     }
 
     if (respuesta.estado === 'completada') {
@@ -342,9 +347,20 @@ const completarEncuesta = async (respuestaId, respuestas, usuarioId) => {
       }
     }
 
-    // Actualizar respuestas y marcar como completada
-    respuesta.respuestas = respuestas;
-    respuesta.marcarCompletada();
+    // Enriquecer respuestas con información de las preguntas
+    const respuestasEnriquecidas = respuestas.map(resp => {
+      const pregunta = encuesta.preguntas.find(p => p.orden === resp.preguntaOrden);
+      return {
+        preguntaOrden: resp.preguntaOrden,
+        respuesta: resp.respuesta,
+        preguntaEnunciado: pregunta?.enunciado || '',
+        preguntaTipo: pregunta?.tipo || 'escala',
+        preguntaOpciones: pregunta?.opciones || []
+      };
+    });
+
+    respuesta.respuestas = respuestasEnriquecidas;
+    await respuesta.marcarCompletada(encuesta);
 
     // Generar PDF con los resultados
     const pdfBuffer = await generarPDFEncuesta(respuesta, encuesta);
@@ -353,7 +369,8 @@ const completarEncuesta = async (respuestaId, respuestas, usuarioId) => {
 
     await respuesta.save();
 
-    return respuesta;
+    // Devolver la respuesta junto con el buffer del PDF
+    return { respuesta, pdfBuffer };
   } catch (error) {
     throw error;
   }
@@ -484,7 +501,7 @@ const subirPDFCloudinary = async (pdfBuffer, nombreArchivo) => {
     const fecha = new Date();
     const formato = fecha.toLocaleDateString("es-CL").replace(/\//g, "-"); 
     
-    // Subir a Cloudinary
+    // Subir a Cloudinary (configuración original que funcionaba)
     const resultado = await cloudinary.uploader.upload(tempPath, {
       resource_type: 'auto',
       folder: 'safehaven/encuestas',
