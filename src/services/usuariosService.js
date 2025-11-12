@@ -230,12 +230,15 @@ class UsuariosService {
       fotoPerfil: usuario.fotoPerfil,
       visibilidadPerfil: usuario.visibilidadPerfil,
       anonimo: usuario.anonimo,
-      fechaRegistro: usuario.fechaRegistro
+      fechaRegistro: usuario.fechaRegistro,
+      // añadir campos útiles para listado público de profesionales
+      biografia: usuario.biografia || '',
+      infoProfesional: usuario.infoProfesional || null,
+      ubicacion: usuario.ubicacion || (usuario.infoProfesional && usuario.infoProfesional.ubicacion) || null
     };
 
     // Si es el propio usuario o tiene permisos especiales, incluir datos adicionales
     if (incluirDatosSensibles || (usuarioActualId && usuario._id.toString() === usuarioActualId.toString())) {
-      usuarioFiltrado.biografia = usuario.biografia;
       usuarioFiltrado.pronombres = usuario.pronombres;
       usuarioFiltrado.genero = usuario.genero;
       usuarioFiltrado.seguidores = usuario.seguidores;
@@ -463,145 +466,248 @@ class UsuariosService {
     };
   }
 
-  async eliminarUsuario(id, contraseña) {
-    const usuario = await Usuario.findById(id);
-    if (!usuario) {
-      throw new Error('No existe un usuario con el ID proporcionado');
-    }
-  
-    // Validar contraseña
-    const coinciden = await bcryp.compare(contraseña, usuario.contraseña);
-    if (!coinciden) {
+async eliminarUsuario(id, contraseña = null) {
+  const usuario = await Usuario.findById(id);
+  if (!usuario) {
+    throw new Error('No existe un usuario con el ID proporcionado');
+  }
+
+ 
+  if (contraseña !== null) {
+    const esValida = await bcrypt.compare(contraseña, usuario.contraseña);
+    if (!esValida) {
       throw new Error('Contraseña incorrecta');
     }
-  
-    // Si tiene foto en Cloudinary, eliminarla
-    if (usuario.fotoPerfil) {
-      const publicId = usuario.fotoPerfil.match(/\/usuarios\/(usuario_\w+)/)?.[1];
-      if (publicId) {
-        await cloudinary.uploader.destroy(`usuarios/${publicId}`);
-      }
-    }
-  
-    // Eliminar usuario de la DB
-    await Usuario.findByIdAndDelete(id);
-  
-    console.log(`✅ Usuario eliminado: ${usuario.correo}`);
-    return true;
   }
 
-  /**
-   * Actualizar información profesional de un usuario
-   * @param {String} id - ID del usuario
-   * @param {Object} infoProfesional - Información profesional a actualizar
-   * @returns {Object} Usuario actualizado
-   */
-  async actualizarInfoProfesional(id, infoProfesional) {
-    const usuario = await Usuario.findById(id);
-    
-    if (!usuario) {
-      throw new Error('No existe un usuario con el ID proporcionado');
+ 
+  if (usuario.fotoPerfil) {
+    try {
+      await eliminarImagenCloudinary(usuario.fotoPerfil);
+    } catch (err) {
+      // No detener el proceso si falla la eliminación de la imagen
+      console.warn('No se pudo eliminar la foto de perfil en Cloudinary:', err.message);
     }
-
-    if (usuario.rol !== 'profesional') {
-      throw new Error('Solo los usuarios con rol profesional pueden tener información profesional');
-    }
-
-    // Actualizar la información profesional
-    usuario.infoProfesional = infoProfesional;
-    await usuario.save();
-
-    // Devolver usuario sin contraseña
-    const usuarioActualizado = usuario.toObject();
-    delete usuarioActualizado.contraseña;
-
-    console.log(`✅ Información profesional actualizada para usuario: ${usuario.correo}`);
-    return usuarioActualizado;
   }
 
-  /**
-   * Buscar profesionales con filtros
-   * @param {Object} filtros - Filtros de búsqueda
-   * @param {Number} pagina - Número de página
-   * @param {Number} limite - Límite de resultados por página
-   * @returns {Object} Lista de profesionales y paginación
-   */
-  async buscarProfesionales(filtros = {}, pagina = 1, limite = 10) {
-    const { especialidad, disponible, ciudad } = filtros;
-    
-    const query = {
-      rol: 'profesional',
-      activo: true,
-      estado: 'activo',
-      infoProfesional: { $ne: null }
-    };
+  await Usuario.findByIdAndDelete(id);
+  return true;
+}
 
-    // Filtrar por especialidad
-    if (especialidad) {
-      query['infoProfesional.especialidades'] = { $in: [especialidad] };
-    }
+ async crearUsuarioAnonimo()  {
+  const randomId = Math.random().toString(36).substring(2, 10);
+  const anonimo = new Usuario({
+    nombreUsuario: `anon_${randomId}`,
+    anonimo: true,
+    activo: true,
+    estado: 'activo'
+  });
+  await anonimo.save();
+  return anonimo;
+};
 
-    // Filtrar por disponibilidad
-    if (disponible !== undefined) {
-      query['infoProfesional.disponible'] = disponible === 'true' || disponible === true;
-    }
 
-    // Filtrar por ciudad
-    if (ciudad) {
-      query['infoProfesional.ubicacion.ciudad'] = { $regex: ciudad, $options: 'i' };
-    }
-
-    const skip = (pagina - 1) * limite;
-
-    const profesionales = await Usuario.find(query)
-      .select('-contraseña')
-      .skip(skip)
-      .limit(limite)
-      .sort({ 'infoProfesional.añosExperiencia': -1, createdAt: -1 });
-
-    const total = await Usuario.countDocuments(query);
-
-    return {
-      profesionales,
-      paginacion: {
-        pagina: parseInt(pagina),
-        limite: parseInt(limite),
-        total,
-        paginas: Math.ceil(total / limite)
-      }
-    };
-  }
 
   /**
-   * Crear una denuncia contra un usuario
-   * @param {Object} datosDenuncia - Datos de la denuncia
+   * Denunciar a un usuario
+   * @param {Object} datos - { usuarioDenunciadoId, usuarioId, motivo, descripcion }
    * @returns {Object} Denuncia creada
    */
-  async denunciarUsuario(datosDenuncia) {
-    const { usuarioDenunciadoId, usuarioId, motivo, descripcion } = datosDenuncia;
-
-    // Verificar que el usuario denunciado existe
-    const usuarioDenunciado = await Usuario.findById(usuarioDenunciadoId);
-    if (!usuarioDenunciado) {
-      throw new Error('No existe un usuario con el ID proporcionado');
+ async denunciarUsuario({ usuarioDenunciadoId, usuarioId, motivo, descripcion = '' }) {
+    if (!usuarioDenunciadoId) {
+      throw new Error('Usuario denunciado requerido');
+    }
+    if (!usuarioId) {
+      throw new Error('ID del autor de la denuncia requerido');
+    }
+    if (!motivo) {
+      throw new Error('Motivo de denuncia requerido');
     }
 
-    // Verificar que no se está denunciando a sí mismo
-    if (usuarioDenunciadoId.toString() === usuarioId.toString()) {
+    // Evitar auto-denuncia
+    if (String(usuarioDenunciadoId) === String(usuarioId)) {
       throw new Error('No puedes denunciarte a ti mismo');
     }
 
-    const denuncia = new Denuncia({
+    // Verificar existencia del usuario denunciado
+    const usuario = await Usuario.findById(usuarioDenunciadoId);
+    if (!usuario) {
+      throw new Error('Usuario objetivo no encontrado');
+    }
+
+    
+    const nuevaDenuncia = new Denuncia({
       tipoDenuncia: 'usuario',
+      usuarioDenunciadoId: usuarioDenunciadoId, 
+      usuarioId: usuarioId,
+      motivo,
+      descripcion,
+      fecha: new Date()
+    });
+
+    // (opcional) debug log - eliminar en producción
+    console.log('Creando denuncia (usuario):', {
       usuarioDenunciadoId,
       usuarioId,
       motivo,
       descripcion
     });
 
-    await denuncia.save();
-    return denuncia;
+    const denunciaGuardada = await nuevaDenuncia.save();
+
+    return denunciaGuardada;
+  }
+
+    /**
+   * Buscar profesionales con filtros (público)
+   * @param {Object} filtros - { especialidad, ciudad, disponible, idiomas, modalidad, q, ordenar }
+   * @param {number} pagina
+   * @param {number} limite
+   * @returns {Object} { usuarios: [], paginacion: { total, pagina, limite, totalPages } }
+   */
+  async buscarProfesionales(filtros = {}, pagina = 1, limite = 10, ordenar = '') {
+    try {
+      const query = { rol: 'profesional', activo: true };
+
+      // Texto de búsqueda (nombre, nickname, especialidades, títulos)
+      if (filtros.q) {
+        const regex = new RegExp(filtros.q, 'i');
+        query.$or = [
+          { nombreCompleto: regex },
+          { nombreUsuario: regex },
+          { 'infoProfesional.especialidades': regex },
+          { 'infoProfesional.titulos': regex },
+        ];
+      }
+
+      if (filtros.especialidad) {
+        query['infoProfesional.especialidades'] = { $in: [new RegExp(filtros.especialidad, 'i')] };
+      }
+
+      if (filtros.ciudad) {
+        query['infoProfesional.ubicacion.ciudad'] = new RegExp(filtros.ciudad, 'i');
+      }
+
+      if (typeof filtros.disponible !== 'undefined') {
+        query['infoProfesional.disponible'] = filtros.disponible === 'true' || filtros.disponible === true;
+      }
+
+      if (filtros.idiomas) {
+        const arr = Array.isArray(filtros.idiomas) ? filtros.idiomas : String(filtros.idiomas).split(',').map(s => s.trim()).filter(Boolean);
+        if (arr.length) query['infoProfesional.idiomas'] = { $in: arr.map(i => new RegExp(i, 'i')) };
+      }
+
+      if (filtros.modalidad) {
+        query['infoProfesional.modalidadesAtencion'] = { $in: [new RegExp(filtros.modalidad, 'i')] };
+      }
+
+      // Orden
+      let sort = { nombreCompleto: 1 };
+      if (ordenar === 'reciente') sort = { createdAt: -1 };
+      else if (ordenar === 'mejor_valorados') sort = { 'infoProfesional.ratingPromedio': -1 };
+
+      const skip = Math.max(0, (Number(pagina) - 1)) * Number(limite);
+      const limit = Number(limite);
+
+      // Proyección explícita: incluir campos públicos relevantes y excluir contraseña
+      const [usuariosRaw, total] = await Promise.all([
+        Usuario.find(query)
+          .select('nombreCompleto nombreUsuario fotoPerfil biografia visibilidadPerfil anonimo infoProfesional ubicacion seguidores seguidos createdAt')
+          .sort(sort)
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        Usuario.countDocuments(query),
+      ]);
+
+      // Aplicar restricciones de visualización (quita campos sensibles)
+      const usuarios = usuariosRaw.map(u => this.aplicarRestriccionesVisualizacion(u, null, false));
+
+      const totalPages = Math.ceil(total / limit) || 1;
+
+      return {
+        usuarios,
+        paginacion: { total, pagina: Number(pagina), limite: limit, totalPages },
+      };
+    } catch (error) {
+      // Propagar con contexto
+      throw new Error(`Error en usuariosService.buscarProfesionales: ${error.message}`);
+    }
+  }
+
+    /**
+  * Registrar un nuevo usuario desde contexto administrador (permite asignar rol 'administrador')
+   * @param {Object} datosUsuario
+   * @returns {Object} Usuario creado sin contraseña
+   */
+  async registrarUsuarioAdmin(datosUsuario) {
+    const {
+      correo,
+      contraseña,
+      nombreCompleto,
+      fechaNacimiento,
+      rol = 'usuario',
+      anonimo,
+      visibilidadPerfil,
+      nombreUsuario,
+      pronombres,
+      biografia,
+      genero,
+      creadoPorAdmin
+    } = datosUsuario;
+
+    // Campos requeridos
+    if (!correo || !contraseña || !nombreUsuario) {
+      throw new Error('correo, contraseña y nombreUsuario son requeridos');
+    }
+
+    // Validar unicidad de correo y nombreUsuario
+    const usuarioExistente = await Usuario.findOne({ correo: correo.toLowerCase() });
+    if (usuarioExistente) {
+      throw new Error('El correo electrónico ya está registrado en el sistema');
+    }
+    const nombreUsuarioExistente = await Usuario.findOne({ nombreUsuario: nombreUsuario.toLowerCase() });
+    if (nombreUsuarioExistente) {
+      throw new Error('El nombre de usuario ya está en uso');
+      }
+
+    // Validar rol permitido (incluye administrador)
+    if (rol && !['usuario', 'profesional', 'administrador'].includes(rol)) {
+      throw new Error('Rol no válido. Solo se permiten los roles: usuario, profesional o administrador');
+    }
+
+    // Encriptar contraseña
+    const saltRounds = config.seguridad.bcryptRounds;
+    const contraseñaEncriptada = await bcrypt.hash(contraseña, saltRounds);
+
+    // Crear nuevo usuario (permitir administrador aquí)
+    const nuevoUsuario = new Usuario({
+      correo: correo.toLowerCase(),
+      contraseña: contraseñaEncriptada,
+      nombreCompleto,
+      fechaNacimiento: fechaNacimiento ? new Date(fechaNacimiento) : undefined,
+      rol: rol || 'usuario',
+      anonimo: !!anonimo,
+      visibilidadPerfil: visibilidadPerfil || 'publico',
+      nombreUsuario: nombreUsuario.toLowerCase(),
+      pronombres: pronombres || '',
+      biografia: biografia || '',
+      genero: genero || '',
+      creadoPorAdmin: creadoPorAdmin || undefined,
+      activo: true
+    });
+
+    const usuarioGuardado = await nuevoUsuario.save();
+
+    // Remover contraseña de la respuesta
+    const usuarioResponse = usuarioGuardado.toObject();
+    delete usuarioResponse.contraseña;
+
+    console.log(`✅ Usuario (admin) registrado exitosamente: ${usuarioGuardado.correo}`);
+    return usuarioResponse;
   }
 }
+
+
 
 module.exports = new UsuariosService();

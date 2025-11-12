@@ -2,6 +2,24 @@ const mongoose = require('mongoose');
 
 const { Schema, model } = mongoose;
 
+// Definición de tópicos para el foro
+const TOPICOS_FORO = [
+  'violencia física',
+  'violencia psicológica',
+  'violencia económica',
+  'violencia digital',
+  'apoyo emocional',
+  'recursos legales',
+  'experiencias personales',
+  'recuperación y autocuidado',
+  'familia y entorno',
+  'denuncias y procesos legales',
+  'prevención',
+  'orientación profesional',
+  'comunidad y redes de apoyo',
+  'otros'
+];
+
 const PublicacionSchema = new Schema({
   autorId: {
     type: Schema.Types.ObjectId,
@@ -28,15 +46,27 @@ const PublicacionSchema = new Schema({
     },
     required: [true, 'El tipo de publicación es obligatorio']
   },
+  // Nuevo campo: tópico (solo requerido para publicaciones de foro)
+  topico: {
+    type: String,
+    enum: {
+      values: TOPICOS_FORO,
+      message: 'El tópico debe ser uno de los valores permitidos'
+    },
+    required: function() { return this.tipo === 'foro'; }
+  },
   anonimo: {
     type: Boolean,
     default: false
   },
-  likes: {
-    type: Number,
-    default: 0,
-    min: [0, 'Los likes no pueden ser negativos']
-  },
+  likes: [{
+    type: Schema.Types.ObjectId,
+    ref: 'Usuario'
+  }],
+  comentarios: [{
+    type: Schema.Types.ObjectId,
+    ref: 'Comentario'
+  }],
   // Campos específicos para publicaciones de perfil
   multimedia: [{
     type: String,
@@ -107,6 +137,11 @@ PublicacionSchema.pre('save', function(next) {
     }
     if (this.etiquetasUsuarios && this.etiquetasUsuarios.length > 0) {
       const error = new Error('Las publicaciones de foro no pueden etiquetar usuarios');
+      return next(error);
+    }
+    // Validar que el tópico esté presente y sea válido
+    if (!this.topico || !TOPICOS_FORO.includes(this.topico)) {
+      const error = new Error('El tópico es obligatorio y debe ser válido para publicaciones de foro');
       return next(error);
     }
   }

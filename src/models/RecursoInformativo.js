@@ -67,7 +67,7 @@ const recursoInformativoSchema = new mongoose.Schema({
   // Archivos multimedia
   imagenPrincipal: {
     type: String, // URL de la imagen
-    default: null
+    default: ''
   },
   
   galeria: [{

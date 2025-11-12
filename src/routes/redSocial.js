@@ -59,6 +59,13 @@ router.post('/solicitudes/:solicitanteId/aceptar', redSocialController.aceptarSo
  */
 router.post('/solicitudes/:solicitanteId/rechazar', redSocialController.rechazarSolicitudSeguimiento);
 
+/**
+ * @route   DELETE /api/red-social/solicitud/:usuarioId
+ * @desc    Cancelar solicitud de seguimiento
+ * @access  Private
+ */
+router.delete('/solicitud/:usuarioId',  redSocialController.cancelarSolicitudSeguimiento);
+
 // ==================== BLOQUEOS ====================
 
 /**

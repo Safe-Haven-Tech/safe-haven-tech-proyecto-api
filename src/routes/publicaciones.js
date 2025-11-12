@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { autenticarToken, verificarRol } = require('../middlewares/auth');
+const { autenticarToken, verificarRol, autenticacionOpcional } = require('../middlewares/auth');
 const { validarPublicacion, validarActualizacionPublicacion, validarComentario, validarDenuncia } = require('../middlewares/validacion');
 const { uploadCualquierArchivo, uploadMultimedia, uploadAdjuntos } = require('../utils/multerPublicaciones');
 
@@ -31,12 +31,14 @@ const {
   denunciarPublicacion,
   denunciarComentario,
   obtenerComentarios,
-  crearComentario
+  crearComentario,
+  eliminarComentario,
+  obtenerPublicacionesPorUsuario,
 } = require('../controllers/publicacionesController');
 
-// Rutas públicas
-router.get('/', obtenerPublicaciones);
-router.get('/:id', obtenerPublicacionPorId);
+// Rutas públicas (con autenticación opcional para saber si el usuario es el dueño)
+router.get('/', autenticacionOpcional, obtenerPublicaciones);
+router.get('/:id', autenticacionOpcional, obtenerPublicacionPorId);
 router.get('/:id/comentarios', obtenerComentarios);
 
 // Rutas que requieren autenticación
@@ -54,5 +56,11 @@ router.delete('/:id/reaccionar', autenticarToken, quitarReaccionDePublicacion);
 router.post('/:id/denunciar', autenticarToken, validarDenuncia, denunciarPublicacion);
 router.post('/:id/comentarios', autenticarToken, validarComentario, crearComentario);
 router.post('/comentarios/:id/denunciar', autenticarToken, validarDenuncia, denunciarComentario);
+
+// Eliminar comentario 
+router.delete('/:id/comentarios/:comentarioId', autenticarToken, eliminarComentario);
+
+//Ruta para obtener publicaciones por usuario
+router.get('/usuario/:usuarioId', obtenerPublicacionesPorUsuario);
 
 module.exports = router;

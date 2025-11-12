@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 
-// Importar controladores
 const {
   crearEncuesta,
   obtenerEncuestas,
@@ -9,20 +8,21 @@ const {
   actualizarEncuesta,
   desactivarEncuesta,
   activarEncuesta,
-  iniciarEncuesta,
-  guardarRespuestaParcial,
   completarEncuesta,
   completarEncuestaDirecta,
   obtenerRespuestasUsuario,
-  obtenerEstadisticasEncuesta
+  obtenerEstadisticasEncuesta,
+  completarEncuestaSinAuth,
+  eliminarEncuesta,
 } = require('../controllers/encuestasController');
 
-// Importar middlewares
-const { verificarRol, autenticarToken } = require('../middlewares/auth');
+const { verificarRol, autenticarToken,autenticacionOpcional } = require('../middlewares/auth');
 
 // ======================= RUTAS PÚBLICAS =======================
-// Obtener todas las encuestas activas
 router.get('/', obtenerEncuestas);
+router.post('/:id/completar-sin-auth', completarEncuestaSinAuth); // opcional, si quieres mantener compatibilidad
+router.post('/:id/completar', autenticacionOpcional, completarEncuesta); // ruta unificada
+router.post('/:id/iniciar', autenticarToken); 
 
 // Obtener una encuesta específica por ID
 router.get('/:id', obtenerEncuestaPorId);
@@ -51,19 +51,14 @@ router.put('/respuestas/:respuestaId/completar',autenticarToken, completarEncues
 router.get('/respuestas/usuario',autenticarToken, obtenerRespuestasUsuario);
 
 // ======================= RUTAS DE ADMINISTRADORES =======================
-// Crear nueva encuesta (solo administradores)
-router.post('/',[autenticarToken, verificarRol('administrador')],crearEncuesta);
-
-// Actualizar encuesta existente (solo administradores)
+router.post('/', [autenticarToken, verificarRol('administrador')], crearEncuesta);
 router.put('/:id', [autenticarToken, verificarRol('administrador')], actualizarEncuesta);
-
-// Desactivar encuesta (solo administradores)
 router.put('/:id/desactivar', [autenticarToken, verificarRol('administrador')], desactivarEncuesta);
-
-// Activar encuesta (solo administradores)
 router.put('/:id/activar', [autenticarToken, verificarRol('administrador')], activarEncuesta);
-
-  // Obtener estadísticas de una encuesta (solo administradores)
 router.get('/:id/estadisticas', [autenticarToken, verificarRol('administrador')], obtenerEstadisticasEncuesta);
+router.delete('/:id', [autenticarToken, verificarRol('administrador')], eliminarEncuesta);
+
+// ======================= RUTA PÚBLICA GENÉRICA =======================
+router.get('/:id', obtenerEncuestaPorId);
 
 module.exports = router;

@@ -1,4 +1,5 @@
-const recursosInformativosService = require("../services/recursosInformativosService");
+const recursosInformativosService = require('../services/recursosInformativosService');
+
 const { cloudinaryRecursos, multerRecursos } = require("../utils");
 
 // Obtener todos los recursos informativos
@@ -44,11 +45,13 @@ const obtenerRecursoPorId = async (req, res) => {
 
     res.json({
       success: true,
+      status: 200,
       data: recurso,
     });
   } catch (error) {
     res.status(404).json({
       success: false,
+      status: 404,
       message: "Recurso no encontrado",
       error: error.message,
     });
@@ -282,63 +285,104 @@ const calificarRecurso = async (req, res) => {
   }
 };
 
-// Incrementar visitas
+
+// Incrementar visitas 
 const incrementarVisitas = async (req, res) => {
   try {
     const { id } = req.params;
+    
     const recurso = await recursosInformativosService.incrementarVisitas(id);
 
     res.json({
       success: true,
-      message: "Visitas incrementadas",
-      data: { visitas: recurso.visitas },
+      message: "Visitas incrementadas exitosamente",
+      data: { 
+        visitas: recurso.visitas,
+        id: recurso._id
+      },
     });
   } catch (error) {
-    res.status(400).json({
+    console.error('Error en incrementarVisitas:', error);
+    
+    if (error.message.includes('no encontrado')) {
+      return res.status(404).json({
+        success: false,
+        message: "Recurso no encontrado",
+        error: error.message,
+      });
+    }
+
+    res.status(500).json({
       success: false,
-      message: "Error al incrementar visitas",
+      message: "Error interno del servidor al incrementar visitas",
       error: error.message,
     });
   }
 };
 
-// Incrementar descargas
+// Incrementar descargas 
 const incrementarDescargas = async (req, res) => {
   try {
     const { id } = req.params;
+    
     const recurso = await recursosInformativosService.incrementarDescargas(id);
 
     res.json({
       success: true,
-      message: "Descargas incrementadas",
-      data: { descargas: recurso.descargas },
+      message: "Descargas incrementadas exitosamente",
+      data: { 
+        descargas: recurso.descargas,
+        id: recurso._id
+      },
     });
   } catch (error) {
-    res.status(400).json({
+    console.error('Error en incrementarDescargas:', error);
+    
+    if (error.message.includes('no encontrado')) {
+      return res.status(404).json({
+        success: false,
+        message: "Recurso no encontrado",
+        error: error.message,
+      });
+    }
+
+    res.status(500).json({
       success: false,
-      message: "Error al incrementar descargas",
+      message: "Error interno del servidor al incrementar descargas",
       error: error.message,
     });
   }
 };
 
-// Incrementar compartidos
+// Incrementar compartidos 
 const incrementarCompartidos = async (req, res) => {
   try {
     const { id } = req.params;
-    const recurso = await recursosInformativosService.incrementarCompartidos(
-      id
-    );
+    
+    const recurso = await recursosInformativosService.incrementarCompartidos(id);
 
     res.json({
       success: true,
-      message: "Compartidos incrementados",
-      data: { compartidos: recurso.compartidos },
+      message: "Compartidos incrementados exitosamente",
+      data: { 
+        compartidos: recurso.compartidos,
+        id: recurso._id
+      },
     });
   } catch (error) {
-    res.status(400).json({
+    console.error('Error en incrementarCompartidos:', error);
+    
+    if (error.message.includes('no encontrado')) {
+      return res.status(404).json({
+        success: false,
+        message: "Recurso no encontrado",
+        error: error.message,
+      });
+    }
+
+    res.status(500).json({
       success: false,
-      message: "Error al incrementar compartidos",
+      message: "Error interno del servidor al incrementar compartidos",
       error: error.message,
     });
   }
@@ -347,18 +391,21 @@ const incrementarCompartidos = async (req, res) => {
 // Obtener estadísticas
 const obtenerEstadisticas = async (req, res) => {
   try {
-    const estadisticas =
-      await recursosInformativosService.obtenerEstadisticas();
-
-    res.json({
-      success: true,
-      data: estadisticas,
+    console.log('📊 Solicitando estadísticas de recursos informativos...');
+    
+    const estadisticas = await recursosInformativosService.obtenerEstadisticas();
+    
+    res.status(200).json({
+      exito: true,
+      mensaje: 'Estadísticas obtenidas exitosamente',
+      data: estadisticas
     });
   } catch (error) {
+    console.error('❌ Error al obtener estadísticas:', error);
     res.status(500).json({
-      success: false,
-      message: "Error al obtener estadísticas",
-      error: error.message,
+      exito: false,
+      mensaje: error.message || 'Error interno del servidor',
+      data: null
     });
   }
 };
@@ -922,6 +969,8 @@ const eliminarArchivo = async (req, res) => {
   }
 };
 
+
+
 module.exports = {
   obtenerRecursos,
   obtenerRecursoPorId,
@@ -936,11 +985,11 @@ module.exports = {
   incrementarVisitas,
   incrementarDescargas,
   incrementarCompartidos,
-  obtenerEstadisticas,
   obtenerTopicosDisponibles,
   obtenerTiposDisponibles,
   subirImagenPrincipal,
   subirImagenesGaleria,
   subirDocumentosAdjuntos,
   eliminarArchivo,
+  obtenerEstadisticas,
 };

@@ -3,21 +3,16 @@ const path = require('path');
 const fs = require('fs');
 
 // Crear directorio de uploads para chat si no existe
-const uploadDir = path.join(__dirname, '../uploads/chat');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+const uploadDir = path.join(__dirname, '..', 'uploads', 'chat');
+fs.mkdirSync(uploadDir, { recursive: true });
 
 // Configuración de almacenamiento
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
+  destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
-    // Generar nombre único para el archivo
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const extension = path.extname(file.originalname);
-    cb(null, `chat_${uniqueSuffix}${extension}`);
+    const ext = path.extname(file.originalname || file.filename || '');
+    const name = `chat_${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`;
+    cb(null, name);
   }
 });
 

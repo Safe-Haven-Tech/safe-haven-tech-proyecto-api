@@ -1,6 +1,16 @@
+
 const mongoose = require('mongoose');
 
 const { Schema, model } = mongoose;
+
+const InfoProfesionalSchema = new Schema({
+  titulos: [{ type: String }],
+  especialidades: [{ type: String }],
+  registroProfesional: { type: String, trim: true },
+  institucionTitulo: { type: String, trim: true },
+  aniosExperiencia: { type: Number },
+  disponible: { type: Boolean, default: true }
+}, { _id: false });
 
 const PostulacionProfesionalSchema = new Schema({
   usuarioId: {
@@ -8,14 +18,14 @@ const PostulacionProfesionalSchema = new Schema({
     ref: 'Usuario',
     required: [true, 'El ID del usuario es obligatorio']
   },
-  estado: {
-    type: String,
-    enum: {
-      values: ['pendiente', 'aprobada', 'rechazada'],
-      message: 'El estado debe ser: pendiente, aprobada o rechazada'
-    },
-    default: 'pendiente'
-  },
+  nombreCompleto: { type: String, trim: true },
+  correo: { type: String, trim: true },
+  telefono: { type: String, trim: true },
+  ubicacion: { type: Schema.Types.Mixed }, // puede ser objeto con ciudad/region/coords
+  biografia: { type: String, trim: true, maxlength: [2000, 'La biografía no puede exceder los 2000 caracteres'] },
+
+  infoProfesional: { type: InfoProfesionalSchema, default: {} },
+
   motivacion: {
     type: String,
     required: [true, 'La motivación es obligatoria'],
@@ -33,6 +43,9 @@ const PostulacionProfesionalSchema = new Schema({
     trim: true,
     maxlength: [200, 'La especialidad no puede exceder los 200 caracteres']
   },
+
+  etiquetas: [{ type: String, trim: true }],
+
   // Archivos adjuntos (URLs de Cloudinary)
   archivos: [{
     tipo: {
@@ -60,6 +73,7 @@ const PostulacionProfesionalSchema = new Schema({
       default: Date.now
     }
   }],
+
   // Información de revisión
   revisadoPor: {
     type: Schema.Types.ObjectId,
@@ -77,6 +91,15 @@ const PostulacionProfesionalSchema = new Schema({
     type: String,
     trim: true,
     maxlength: [500, 'El motivo del rechazo no puede exceder los 500 caracteres']
+  },
+
+  estado: {
+    type: String,
+    enum: {
+      values: ['pendiente', 'aprobada', 'rechazada'],
+      message: 'El estado debe ser: pendiente, aprobada o rechazada'
+    },
+    default: 'pendiente'
   }
 }, {
   timestamps: true
@@ -87,7 +110,7 @@ PostulacionProfesionalSchema.index({ usuarioId: 1 });
 PostulacionProfesionalSchema.index({ estado: 1 });
 PostulacionProfesionalSchema.index({ createdAt: -1 });
 
-// Validación: Un usuario solo puede tener una postulación pendiente
+
 PostulacionProfesionalSchema.pre('save', async function(next) {
   if (this.isNew) {
     const postulacionPendiente = await this.constructor.findOne({
@@ -104,4 +127,3 @@ PostulacionProfesionalSchema.pre('save', async function(next) {
 });
 
 module.exports = model('PostulacionProfesional', PostulacionProfesionalSchema);
-
