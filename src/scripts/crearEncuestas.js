@@ -5,19 +5,40 @@ require('dotenv').config();
 
 /**
  * Script para crear encuestas de detección de violencia
+ * 
+ * IMPORTANTE: Niveles de Recomendaciones Personalizadas
+ * ======================================================
+ * Los niveles deben usar EXACTAMENTE estos valores del enum:
+ * - 'bajo'    → Bajo Riesgo      (#4CAF50 - Verde)
+ * - 'medio'   → Riesgo Medio     (#FF9800 - Naranja)
+ * - 'alto'    → Alto Riesgo      (#FF5722 - Rojo)
+ * - 'crítico' → Riesgo Crítico   (#D32F2F - Rojo oscuro)
+ * 
+ * Estos valores DEBEN coincidir con:
+ * - El enum del modelo RespuestaEncuesta
+ * - El dropdown del frontend (SurveysManagement.jsx)
+ * - El generador de PDFs (pdfGenerator.js)
+ * 
+ * NO usar valores como: "Relación abusiva", "Primer nivel", etc.
+ * La descripción personalizada va en el campo 'descripcion', no en 'nivel'.
  */
 
 const crearEncuestas = async () => {
   try {
-    // Conectar a MongoDB
+    // Conectar a MongoDB usando MONGO_CONNECTION y MONGO_DB_NAME
     const mongoConnection = process.env.MONGO_CONNECTION;
+    const mongoDbName = process.env.MONGO_DB_NAME || 'safehaven';
     
     if (!mongoConnection) {
       throw new Error('❌ MONGO_CONNECTION no está definida en las variables de entorno');
     }
 
+    // Construir URL completa con el nombre de la base de datos
+    const mongoUrl = `${mongoConnection}${mongoDbName}`;
+    
     console.log('🔗 Conectando a MongoDB...');
-    await mongoose.connect(mongoConnection);
+    console.log(`📊 Base de datos: ${mongoDbName}`);
+    await mongoose.connect(mongoUrl);
     console.log('✅ Conectado a MongoDB');
 
     // Buscar un administrador para asignar como creador
@@ -54,13 +75,14 @@ const crearEncuestas = async () => {
       tiempoEstimado: 10,
       version: '1.0',
       // Recomendaciones personalizadas según puntaje (Sí=3pts, A veces=2pts, Rara vez=1pt, No=0pts)
+      // Niveles: bajo, medio, alto, crítico (deben coincidir con el enum del modelo)
       recomendacionesPorNivel: [
         {
           rangoMin: 1,
           rangoMax: 11,
-          nivel: 'Relación abusiva',
+          nivel: 'bajo',
           descripcion: 'Existencia de problemas en el hogar, pero que se resuelven sin violencia física.',
-          colorHexadecimal: '#FFC107',
+          colorHexadecimal: '#4CAF50',
           recomendaciones: [
             'Identifica los conflictos que surgen en tu relación y busca resolverlos mediante diálogo.',
             'Considera terapia de pareja si los problemas persisten.',
@@ -71,7 +93,7 @@ const crearEncuestas = async () => {
         {
           rangoMin: 12,
           rangoMax: 22,
-          nivel: 'Primer nivel de abuso',
+          nivel: 'medio',
           descripcion: 'La violencia en la relación está comenzando. Es una situación de ALERTA y un indicador de que la violencia puede aumentar en el futuro.',
           colorHexadecimal: '#FF9800',
           recomendaciones: [
@@ -86,9 +108,9 @@ const crearEncuestas = async () => {
         {
           rangoMin: 23,
           rangoMax: 34,
-          nivel: 'Abuso severo',
+          nivel: 'alto',
           descripcion: 'En este punto es importante solicitar ayuda institucional o personal y abandonar la casa temporalmente.',
-          colorHexadecimal: '#F44336',
+          colorHexadecimal: '#FF5722',
           recomendaciones: [
             'URGENTE: Solicita ayuda institucional inmediatamente.',
             'Considera abandonar la casa temporalmente por tu seguridad.',
@@ -102,9 +124,9 @@ const crearEncuestas = async () => {
         {
           rangoMin: 35,
           rangoMax: 45,
-          nivel: '¡Abuso peligroso!',
+          nivel: 'crítico',
           descripcion: 'Debes considerar en forma URGENTE e inmediata la posibilidad de dejar la relación en forma temporal y obtener apoyo externo, judicial y legal. Tu vida puede estar en peligro.',
-          colorHexadecimal: '#9C27B0',
+          colorHexadecimal: '#D32F2F',
           recomendaciones: [
             '⚠️ PELIGRO INMINENTE: Tu vida puede estar en riesgo. Actúa YA.',
             'Abandona el lugar de forma inmediata y busca refugio seguro.',
@@ -237,11 +259,12 @@ const crearEncuestas = async () => {
       tiempoEstimado: 8,
       version: '1.0',
       // Recomendaciones específicas para violencia en noviazgo (Sí=3pts, A veces=2pts, Rara vez=1pt, No=0pts)
+      // Niveles: bajo, medio, alto, crítico (deben coincidir con el enum del modelo)
       recomendacionesPorNivel: [
         {
           rangoMin: 0,
           rangoMax: 5,
-          nivel: 'Relación no abusiva',
+          nivel: 'bajo',
           descripcion: 'Tal vez existan algunos problemas que de manera común se presentan entre parejas, pero se resuelven sin violencia.',
           colorHexadecimal: '#4CAF50',
           recomendaciones: [
@@ -254,9 +277,9 @@ const crearEncuestas = async () => {
         {
           rangoMin: 6,
           rangoMax: 15,
-          nivel: 'Platica con tu pareja',
+          nivel: 'medio',
           descripcion: 'Revisa las reglas de tu relación y establece límites claros.',
-          colorHexadecimal: '#FFEB3B',
+          colorHexadecimal: '#FF9800',
           recomendaciones: [
             'Habla con tu pareja sobre las dinámicas que te incomodan.',
             'Establece límites claros sobre lo que es aceptable y lo que no.',
@@ -268,9 +291,9 @@ const crearEncuestas = async () => {
         {
           rangoMin: 16,
           rangoMax: 25,
-          nivel: 'Estás viviendo violencia',
+          nivel: 'alto',
           descripcion: 'Tu relación tiene señales de abuso de poder. Es importante tomar acción.',
-          colorHexadecimal: '#FF9800',
+          colorHexadecimal: '#FF5722',
           recomendaciones: [
             'Tu relación muestra señales claras de violencia. Reconócelo.',
             'Busca apoyo en personas de confianza (familia, amigos, profesores).',
@@ -283,9 +306,9 @@ const crearEncuestas = async () => {
         {
           rangoMin: 26,
           rangoMax: 36,
-          nivel: '¡CUIDADO! Tu seguridad está en riesgo',
+          nivel: 'crítico',
           descripcion: 'Pide asesoría y apoyo urgente. Tu seguridad puede estar en riesgo.',
-          colorHexadecimal: '#F44336',
+          colorHexadecimal: '#D32F2F',
           recomendaciones: [
             '⚠️ PELIGRO: Tu seguridad está en riesgo. Actúa ahora.',
             'Termina la relación de forma segura. Busca apoyo antes de hacerlo.',

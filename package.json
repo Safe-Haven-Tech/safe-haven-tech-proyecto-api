@@ -6,12 +6,10 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
     "crear-usuarios": "node src/scripts/crearUsuarios.js",
     "crear-profesional": "node src/scripts/crearUsuarioProfesional.js",
     "crear-encuestas": "node src/scripts/crearEncuestas.js",
-    "crear-datos-prueba": "node src/scripts/crearDatosPrueba.js",
-    "setup-testing": "npm run crear-encuestas && npm run crear-datos-prueba"
+    "crear-recursos": "node src/scripts/crearRecursosInformativos.js"
   },
   "repository": {
     "type": "git",
@@ -29,7 +27,6 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^4.21.2",
-    "express-rate-limit": "^8.0.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.17.1",

@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const chatService = require('../services/chatService');
-const { config } = require('../config');
+require('dotenv').config();
 
 /**
  * Script para limpiar mensajes temporales expirados
@@ -22,8 +22,17 @@ async function limpiarMensajesTemporales() {
 
 // Ejecutar si se llama directamente
 if (require.main === module) {
+  // Construir URL completa con el nombre de la base de datos
+  require('dotenv').config();
+  const mongoConnection = process.env.MONGO_CONNECTION || 'mongodb://localhost:27017/';
+  const mongoDbName = process.env.MONGO_DB_NAME || 'safehaven';
+  const mongoUrl = `${mongoConnection}${mongoDbName}`;
+  
+  console.log('🔗 Conectando a MongoDB...');
+  console.log(`📊 Base de datos: ${mongoDbName}`);
+  
   // Conectar a la base de datos
-  mongoose.connect(config.database.uri, {
+  mongoose.connect(mongoUrl, {
     useNewUrlParser: true,
     useUnifiedTopology: true
   })

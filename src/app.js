@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 const { config } = require('./config');
@@ -33,25 +32,6 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: '*'
 }));
-
-// Rate limiter desactivado para desarrollo
-// Si necesitas activarlo en producción, descomenta el código siguiente:
-/*
-const limiter = rateLimit({
-  windowMs: config.seguridad.rateLimitWindow,
-  max: config.seguridad.rateLimitMax,
-  message: {
-    error: 'Demasiadas solicitudes desde esta IP, intenta de nuevo más tarde.',
-    retryAfter: Math.ceil(config.seguridad.rateLimitWindow / 1000)
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-app.use('/api/', limiter);
-console.log(`✅ Rate limiter activo: ${config.seguridad.rateLimitMax} solicitudes cada ${config.seguridad.rateLimitWindow / 1000} segundos`);
-*/
-console.log('⚠️ Rate limiter desactivado');
 
 const formatoLog = config.servidor.entorno === 'production' ? 'combined' : 'dev';
 app.use(morgan(formatoLog, {

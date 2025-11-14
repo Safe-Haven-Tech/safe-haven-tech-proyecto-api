@@ -1,6 +1,9 @@
 # SafeHaven - Backend API
 
-Backend robusto y seguro para la aplicación SafeHaven, construido con Node.js, Express y MongoDB.
+Este es el **backend** de la aplicación **SafeHaven**, desarrollado con **NodeJS**, **ExpressJS** y **MongoDB**.  
+Su objetivo es proporcionar una API robusta, segura y bien estructurada para gestionar la lógica del sistema, el acceso a datos y la comunicación con el frontend.
+
+Creado por: Gerardo Benavides y Alvaro Serey.
 
 ## 🚀 Características
 
@@ -171,21 +174,10 @@ node src/index.js
 
 ### Producción
 ```bash
-# Construir para producción
-npm run build
-
 # Iniciar en producción
 npm start
 ```
 
-### Testing
-```bash
-# Ejecutar tests
-npm test
-
-# Tests en modo watch
-npm run test:watch
-```
 
 ## 🔧 Configuración
 
@@ -202,12 +194,11 @@ npm run test:watch
 | `CLOUDINARY_API_KEY` | API Key de Cloudinary | **Requerida** |
 | `CLOUDINARY_API_SECRET` | API Secret de Cloudinary | **Requerida** |
 | `CORS_ORIGIN` | Origen permitido para CORS | `*` |
-| `RATE_LIMIT_MAX` | Máximo de solicitudes | `1000` |
 
 ### Configuraciones por Entorno
 
-- **Development**: Logs detallados, rate limiting flexible, auto-indexación MongoDB
-- **Production**: Logs optimizados, rate limiting estricto, optimizaciones de rendimiento
+- **Development**: Logs detallados, auto-indexación MongoDB, debug habilitado
+- **Production**: Logs optimizados, optimizaciones de rendimiento, validaciones estrictas
 - **Test**: Configuración específica para testing, base de datos separada
 
 ## 🎯 Funcionalidades Principales
@@ -316,10 +307,6 @@ npm run test:watch
 - `PUT /:id/aprobar` - Aprobar postulación (admin)
 - `PUT /:id/rechazar` - Rechazar postulación (admin)
 
-### 🔍 Búsqueda (`/api/buscar`)
-- `GET /` - Búsqueda global
-- `GET /sugerencias` - Sugerencias de búsqueda
-
 ### 🛡️ Moderación (`/api/moderacion`)
 - `GET /denuncias` - Listar denuncias (admin)
 - `PUT /denuncias/:id/revisar` - Revisar denuncia (admin)
@@ -329,13 +316,13 @@ npm run test:watch
 
 - **Helmet**: Headers de seguridad HTTP (CSP, HSTS, etc.)
 - **CORS**: Control de acceso entre orígenes configurable
-- **Rate Limiting**: Desactivado en desarrollo, configurable en producción
 - **Validación de datos**: Sanitización y validación robusta en todos los endpoints
 - **JWT**: Autenticación segura con tokens de acceso y refresco
 - **Bcrypt**: Hashing seguro de contraseñas (12 rounds)
 - **Autorización por roles**: Middleware para verificar permisos
 - **Cloudinary**: Almacenamiento seguro de archivos en la nube
 - **Validación de archivos**: Multer con restricciones de tamaño y tipo
+- **Mongoose validations**: Validaciones a nivel de esquema para integridad de datos
 
 ## 🛠️ Scripts Disponibles
 
@@ -385,12 +372,6 @@ npm run setup-testing         # Configurar entorno de testing completo
 3. Linux: `sudo apt-get install -y libgbm-dev`
 4. Revisa los logs para más detalles
 
-### Error: "Rate Limiting bloqueando solicitudes"
-1. El rate limiter está desactivado por defecto en desarrollo
-2. Si necesitas ajustarlo, modifica `RATE_LIMIT_MAX` en `.env`
-3. Para desarrollo: usa valores altos (1000+)
-4. Para producción: usa valores bajos (100-200)
-
 ## 🔄 Graceful Shutdown
 
 La aplicación maneja señales del sistema para un cierre limpio:
@@ -437,45 +418,10 @@ La aplicación genera logs detallados en la consola:
 
 ### Configurar Datos de Prueba
 ```bash
-# Opción 1: Todo en uno
-npm run setup-testing
-
-# Opción 2: Paso a paso
 npm run crear-usuarios        # Usuarios: admin, profesional, usuarios normales
 npm run crear-profesional     # Usuario profesional adicional
 npm run crear-encuestas       # Encuestas con recomendaciones personalizadas
 npm run crear-datos-prueba    # Publicaciones, comentarios, etc.
-```
-
-### Usuarios de Prueba Creados
-
-| Email | Contraseña | Rol | Nickname |
-|-------|------------|-----|----------|
-| `admin@safehaven.com` | `Admin123!` | administrador | admin_safehaven |
-| `profesional@safehaven.com` | `Prof123!` | profesional | dr_mendez |
-| `usuario1@safehaven.com` | `User123!` | usuario | maria_rodriguez |
-
-## 💡 Características Especiales
-
-### Recomendaciones Personalizadas en Encuestas
-Los administradores pueden configurar umbrales de puntaje con recomendaciones específicas:
-
-```javascript
-{
-  recomendacionesPorNivel: [
-    {
-      rangoMin: 0,
-      rangoMax: 20,
-      nivel: "bajo",           // bajo, medio, alto, crítico
-      descripcion: "Estado óptimo",
-      recomendaciones: [
-        "Mantén tus buenos hábitos",
-        "Practica meditación diaria"
-      ],
-      colorHexadecimal: "#4CAF50"
-    }
-  ]
-}
 ```
 
 ### Generación de PDFs
@@ -505,7 +451,6 @@ Los administradores pueden configurar umbrales de puntaje con recomendaciones es
 ### Seguridad
 - **Helmet** (^8.1.0): Headers de seguridad HTTP
 - **CORS** (^2.8.5): Control de acceso entre orígenes
-- **Express Rate Limit** (^8.0.1): Protección contra spam
 - **bcrypt** (^6.0.0): Hashing de contraseñas
 - **jsonwebtoken** (^9.0.2): Autenticación JWT
 
@@ -597,44 +542,5 @@ Devuelve URL al usuario
 - Multimedia (imágenes, archivos)
 - Sistema de likes
 - Moderación
-
-## 📞 Soporte
-
-Si tienes problemas o preguntas:
-
-1. Revisa la sección **🐛 Solución de Problemas**
-2. Verifica los logs de la aplicación (muy descriptivos)
-3. Revisa las variables de entorno en `.env`
-4. Consulta los ejemplos en `env.example`
-5. Ejecuta los scripts de prueba para verificar el sistema
-
-## 🔄 Workflow Recomendado para Desarrollo
-
-1. **Configuración inicial:**
-   ```bash
-   npm install
-   cp env.example .env
-   # Editar .env con tus credenciales
-   ```
-
-2. **Primera ejecución:**
-   ```bash
-   npm run crear-usuarios
-   npm run crear-encuestas
-   npm run dev
-   ```
-
-3. **Desarrollo:**
-   - El servidor se auto-recarga con nodemon
-   - Los logs muestran cada request en tiempo real
-   - Usa Postman/Thunder Client para probar endpoints
-
-4. **Testing:**
-   ```bash
-   npm run crear-datos-prueba
-   # Prueba con los usuarios creados
-   ```
-
----
 
 **SafeHaven Backend** - Construido con ❤️ para proporcionar una plataforma segura de salud mental y bienestar.

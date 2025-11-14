@@ -6,7 +6,14 @@ require('dotenv').config();
 // Función para conectar a la base de datos
 const conectarDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_CONNECTION || 'mongodb://localhost:27017/safehaven');
+    // Construir URL completa con el nombre de la base de datos
+    const mongoConnection = process.env.MONGO_CONNECTION || 'mongodb://localhost:27017/';
+    const mongoDbName = process.env.MONGO_DB_NAME || 'safehaven';
+    const mongoUrl = `${mongoConnection}${mongoDbName}`;
+    
+    console.log('🔗 Conectando a MongoDB...');
+    console.log(`📊 Base de datos: ${mongoDbName}`);
+    await mongoose.connect(mongoUrl);
     console.log('✅ Conectado a MongoDB');
   } catch (error) {
     console.error('❌ Error conectando a MongoDB:', error.message);

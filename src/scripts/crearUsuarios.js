@@ -16,8 +16,13 @@ const crearUsuarios = async () => {
       throw new Error('❌ MONGO_CONNECTION no está definida en las variables de entorno');
     }
 
+    // Construir URL completa con el nombre de la base de datos
+    const mongoDbName = process.env.MONGO_DB_NAME || 'safehaven';
+    const mongoUrl = `${mongoConnection}${mongoDbName}`;
+    
     console.log('🔗 Conectando a MongoDB...');
-    await mongoose.connect(mongoConnection);
+    console.log(`📊 Base de datos: ${mongoDbName}`);
+    await mongoose.connect(mongoUrl);
     console.log('✅ Conectado a MongoDB');
 
     // Usuarios a crear

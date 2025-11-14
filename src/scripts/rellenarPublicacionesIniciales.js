@@ -1,12 +1,19 @@
 const mongoose = require('mongoose');
 const Publicacion = require('../models/Publicacion');
 const Usuario = require('../models/Usuario');
-const { config } = require('../config');
+require('dotenv').config();
 
 // Conectar a la base de datos
 const conectarDB = async () => {
   try {
-    await mongoose.connect(config.database.url, {
+    // Construir URL completa con el nombre de la base de datos
+    const mongoConnection = process.env.MONGO_CONNECTION || 'mongodb://localhost:27017/';
+    const mongoDbName = process.env.MONGO_DB_NAME || 'safehaven';
+    const mongoUrl = `${mongoConnection}${mongoDbName}`;
+    
+    console.log('🔗 Conectando a MongoDB...');
+    console.log(`📊 Base de datos: ${mongoDbName}`);
+    await mongoose.connect(mongoUrl, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
