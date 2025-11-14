@@ -8,6 +8,8 @@ const {
   actualizarEncuesta,
   desactivarEncuesta,
   activarEncuesta,
+  iniciarEncuesta,
+  guardarRespuestaParcial,
   completarEncuesta,
   completarEncuestaDirecta,
   obtenerRespuestasUsuario,
@@ -21,8 +23,7 @@ const { verificarRol, autenticarToken,autenticacionOpcional } = require('../midd
 // ======================= RUTAS PÚBLICAS =======================
 router.get('/', obtenerEncuestas);
 router.post('/:id/completar-sin-auth', completarEncuestaSinAuth); // opcional, si quieres mantener compatibilidad
-router.post('/:id/completar', autenticacionOpcional, completarEncuesta); // ruta unificada
-router.post('/:id/iniciar', autenticarToken); 
+router.post('/:id/completar', autenticacionOpcional, completarEncuesta); // ruta unificada 
 
 // Obtener una encuesta específica por ID
 router.get('/:id', obtenerEncuestaPorId);

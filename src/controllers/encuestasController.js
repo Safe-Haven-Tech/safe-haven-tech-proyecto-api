@@ -404,6 +404,49 @@ const activarEncuesta = async (req, res) => {
 
 
 /**
+ * @desc    Iniciar una encuesta para un usuario
+ * @route   POST /api/encuestas/:id/iniciar
+ * @access  Private
+ */
+const iniciarEncuesta = async (req, res) => {
+  try {
+    const { id: encuestaId } = req.params;
+    const usuarioId = req.usuario.userId;
+
+    const resultado = await encuestasService.iniciarEncuesta(encuestaId, usuarioId);
+
+    res.status(200).json({
+      mensaje: resultado.esNueva ? 'Encuesta iniciada exitosamente' : 'Encuesta en progreso encontrada',
+      respuesta: resultado.nuevaRespuesta,
+      esNueva: resultado.esNueva,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error al iniciar encuesta:', error);
+
+    if (error.message === 'Encuesta no encontrada') {
+      return res.status(404).json({
+        error: 'Encuesta no encontrada',
+        detalles: error.message
+      });
+    }
+
+    if (error.message === 'La encuesta no está activa') {
+      return res.status(400).json({
+        error: 'Encuesta inactiva',
+        detalles: error.message
+      });
+    }
+
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalles: config.servidor.entorno === 'development' ? error.message : 'Error al procesar la solicitud'
+    });
+  }
+};
+
+/**
  * @desc    Guardar respuesta parcial de encuesta
  * @route   PUT /api/encuestas/respuestas/:respuestaId/parcial
  * @access  Private
@@ -820,6 +863,8 @@ module.exports = {
   desactivarEncuesta,
   eliminarEncuesta,
   activarEncuesta,
+  iniciarEncuesta,
+  guardarRespuestaParcial,
   completarEncuesta,
   completarEncuestaDirecta,
   obtenerRespuestasUsuario,

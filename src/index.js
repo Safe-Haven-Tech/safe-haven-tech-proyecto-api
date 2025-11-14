@@ -11,8 +11,8 @@ let cleanupInterval = null;
 
 const runCleanup = async () => {
   try {
-    const deleted = await chatService.limpiarMensajesTemporalesExpirados();
-    console.log(`[chat-cleanup] Mensajes temporales eliminados: ${deleted}`);
+    const resultado = await chatService.limpiarMensajesExpirados();
+    console.log(`[chat-cleanup] Mensajes temporales eliminados: ${resultado.deletedCount || 0}`);
   } catch (err) {
     console.error('[chat-cleanup] Error limpiando mensajes temporales:', err);
   }
@@ -147,8 +147,7 @@ const verificarDependencias = () => {
     'mongoose',
     'cors',
     'helmet',
-    'morgan',
-    'express-rate-limit'
+    'morgan'
   ];
 
   const dependenciasFaltantes = [];
