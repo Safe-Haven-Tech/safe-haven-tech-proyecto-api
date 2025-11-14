@@ -630,5 +630,6 @@ module.exports = {
   obtenerRespuestasUsuario,
   obtenerEstadisticasEncuesta,
   generarPDFSinAuth,
+  subirPDFCloudinary,
   eliminarEncuesta,
 };

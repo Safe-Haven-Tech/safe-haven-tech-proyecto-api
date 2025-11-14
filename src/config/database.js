@@ -5,11 +5,21 @@ const mongoose = require('mongoose');
  */
 const conectarDB = async () => {
   try {
-    const mongoURL = process.env.MONGO_CONNECTION;
+    const mongoConnection = process.env.MONGO_CONNECTION;
+    const mongoDbName = process.env.MONGO_DB_NAME || 'safehaven';
     
-    if (!mongoURL) {
+    if (!mongoConnection) {
       throw new Error('La variable de entorno MONGO_CONNECTION no está definida');
     }
+
+    // Construir la URL completa con el nombre de la base de datos
+    // Si MONGO_CONNECTION ya termina con /, no agregar otro
+    // Si no termina con /, agregarlo antes del nombre de la BD
+    let mongoURL = mongoConnection.trim();
+    if (!mongoURL.endsWith('/')) {
+      mongoURL += '/';
+    }
+    mongoURL += mongoDbName;
 
     const opcionesConexion = {
       maxPoolSize: 10, 
@@ -17,6 +27,10 @@ const conectarDB = async () => {
       socketTimeoutMS: 45000, 
       autoIndex: false, 
     };
+
+    console.log('🔗 Conectando a MongoDB...');
+    console.log(`📊 Base de datos: ${mongoDbName}`);
+    console.log(`🔗 URL: ${mongoURL.replace(/\/\/[^:]+:[^@]+@/, '//***:***@')}`); // Ocultar credenciales en el log
 
     const conexion = await mongoose.connect(mongoURL, opcionesConexion);
     
@@ -54,6 +68,7 @@ const conectarDB = async () => {
     console.error('❌ Error al conectar a MongoDB:', error.message);
     console.error('🔍 Verifica que:');
     console.error('   - La variable MONGO_CONNECTION esté definida');
+    console.error('   - La variable MONGO_DB_NAME esté definida (o usará "safehaven" por defecto)');
     console.error('   - La URL de conexión sea válida');
     console.error('   - MongoDB esté ejecutándose');
     console.error('   - Las credenciales sean correctas');

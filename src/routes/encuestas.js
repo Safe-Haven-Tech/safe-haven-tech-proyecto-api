@@ -22,17 +22,13 @@ const { verificarRol, autenticarToken,autenticacionOpcional } = require('../midd
 
 // ======================= RUTAS PÚBLICAS =======================
 router.get('/', obtenerEncuestas);
-router.post('/:id/completar-sin-auth', completarEncuestaSinAuth); // opcional, si quieres mantener compatibilidad
-router.post('/:id/completar', autenticacionOpcional, completarEncuesta); // ruta unificada 
-
-// Obtener una encuesta específica por ID
 router.get('/:id', obtenerEncuestaPorId);
 
-// Completar encuesta directamente (genera PDF) - CON autenticación
-router.post('/:id/completar', autenticarToken, completarEncuestaDirecta);
+// Completar encuesta sin autenticación (genera PDF) - PÚBLICA
+router.post('/:id/completar-sin-auth', completarEncuestaSinAuth);
 
-// Completar encuesta sin autenticación (para usuarios anónimos)
-router.post('/:id/completar-sin-auth', completarEncuestaDirecta);
+// Completar encuesta con o sin autenticación (genera PDF) - PÚBLICA OPCIONAL
+router.post('/:id/completar', autenticacionOpcional, completarEncuesta);
 
 // ======================= RUTAS PRIVADAS =======================
 // Todas las rutas a partir de aquí requieren autenticación
@@ -58,8 +54,5 @@ router.put('/:id/desactivar', [autenticarToken, verificarRol('administrador')], 
 router.put('/:id/activar', [autenticarToken, verificarRol('administrador')], activarEncuesta);
 router.get('/:id/estadisticas', [autenticarToken, verificarRol('administrador')], obtenerEstadisticasEncuesta);
 router.delete('/:id', [autenticarToken, verificarRol('administrador')], eliminarEncuesta);
-
-// ======================= RUTA PÚBLICA GENÉRICA =======================
-router.get('/:id', obtenerEncuestaPorId);
 
 module.exports = router;

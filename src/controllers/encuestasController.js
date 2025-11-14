@@ -2,6 +2,7 @@ const encuestasService = require('../services/encuestasService');
 const { generarPDFEncuesta } = require('../utils/pdfGenerator');
 const RespuestaEncuesta = require('../models/RespuestaEncuesta');
 const { config } = require('../config');
+const { subirPDFCloudinary } = encuestasService;
 
 // Función auxiliar para calcular puntajes
 const calcularPuntajeRespuesta = (pregunta, respuesta) => {
@@ -573,9 +574,10 @@ const completarEncuestaDirecta = async (req, res) => {
 };
 
 /**
- * @desc    Completar encuesta
+ * @desc    Completar encuesta (con o sin autenticación)
+ * @route   POST /api/encuestas/:id/completar
  * @route   PUT /api/encuestas/respuestas/:respuestaId/completar
- * @access  Private
+ * @access  Public (opcional) / Private
  */
 const completarEncuesta = async (req, res) => {
   try {
@@ -676,10 +678,24 @@ const completarEncuesta = async (req, res) => {
 
     const pdfBuffer = await generarPDFEncuesta(respuestaFinal, encuesta);
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename=Encuesta_${id}.pdf`);
-    res.setHeader('Content-Length', pdfBuffer.length);
-    res.end(pdfBuffer);
+    // Subir PDF a Cloudinary
+    const nombreArchivo = usuarioId 
+      ? `encuesta_${id}_usuario_${usuarioId}` 
+      : `encuesta_${id}_anonimo_${Date.now()}`;
+    const pdfUrl = await subirPDFCloudinary(pdfBuffer, nombreArchivo);
+
+    // Devolver JSON con la URL del PDF en lugar del buffer directo
+    res.status(200).json({
+      mensaje: 'Encuesta completada exitosamente',
+      pdfUrl: pdfUrl,
+      respuesta: {
+        puntajeTotal: respuestaFinal.puntajeTotal,
+        nivelRiesgo: respuestaFinal.nivelRiesgo,
+        recomendaciones: respuestaFinal.recomendaciones,
+        fechaCompletado: respuestaFinal.fechaCompletado
+      },
+      timestamp: new Date().toISOString()
+    });
 
   } catch (error) {
     console.error('❌ Error al completar encuesta unificada:', error);
@@ -836,11 +852,22 @@ const completarEncuestaSinAuth = async (req, res) => {
     // Generar PDF
     const pdfBuffer = await generarPDFEncuesta(respuestaTemporal, encuesta);
 
-    // Configurar headers
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename=Encuesta_${id}.pdf`);
-    res.setHeader('Content-Length', pdfBuffer.length);
-    res.end(pdfBuffer);
+    // Subir PDF a Cloudinary
+    const nombreArchivo = `encuesta_${id}_anonimo_${Date.now()}`;
+    const pdfUrl = await subirPDFCloudinary(pdfBuffer, nombreArchivo);
+
+    // Devolver JSON con la URL del PDF en lugar del buffer directo
+    res.status(200).json({
+      mensaje: 'Encuesta completada exitosamente',
+      pdfUrl: pdfUrl,
+      respuesta: {
+        puntajeTotal: respuestaTemporal.puntajeTotal,
+        nivelRiesgo: respuestaTemporal.nivelRiesgo,
+        recomendaciones: respuestaTemporal.recomendaciones,
+        fechaCompletado: respuestaTemporal.fechaCompletado
+      },
+      timestamp: new Date().toISOString()
+    });
 
   } catch (error) {
     console.error('❌ Error al completar encuesta sin auth:', error);
